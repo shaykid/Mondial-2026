@@ -26,6 +26,7 @@ export default function Header() {
           <NavLink to="/matches" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>משחקים</NavLink>
           <NavLink to="/groups" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>בתים</NavLink>
           <NavLink to="/leaderboard" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>טבלת מצטיינים</NavLink>
+          <NavLink to="/profile" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>פרופיל</NavLink>
           {user.isAdmin && (
             <NavLink to="/admin" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>ניהול</NavLink>
           )}

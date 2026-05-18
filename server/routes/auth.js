@@ -12,6 +12,8 @@ function sanitize(user) {
     id: user.id,
     email: user.email,
     name: user.name,
+    phone_number: user.phone_number || '',
+    department: user.department || '',
     isAdmin: !!user.is_admin,
     createdAt: user.created_at
   };
@@ -20,7 +22,7 @@ function sanitize(user) {
 // הרשמה
 router.post('/register', async (req, res) => {
   try {
-    const { email, name, password } = req.body || {};
+    const { email, name, password, phone_number, department } = req.body || {};
     if (!email || !name || !password) {
       return res.status(400).json({ error: 'כל השדות נדרשים' });
     }
@@ -33,8 +35,8 @@ router.post('/register', async (req, res) => {
 
     const hash = bcrypt.hashSync(password, 10);
     const r = await db.run(
-      `INSERT INTO users (email, name, password_hash, is_admin) VALUES (?, ?, ?, 0)`,
-      [lower, name.trim(), hash]
+      `INSERT INTO users (email, name, phone_number, department, password_hash, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+      [lower, name.trim(), (phone_number || '').trim() || null, (department || '').trim() || null, hash]
     );
     const user = await db.one('SELECT * FROM users WHERE id = ?', [r.insertId]);
     const token = signToken(user);
@@ -70,6 +72,29 @@ router.get('/me', auth(), async (req, res) => {
     res.json({ user: sanitize(user) });
   } catch (e) {
     console.error('me:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// שינוי סיסמה
+router.post('/change-password', auth(), async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body || {};
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'יש להזין סיסמה נוכחית וסיסמה חדשה' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'הסיסמה החדשה חייבת להכיל לפחות 6 תווים' });
+    }
+    const user = await db.one('SELECT id, password_hash FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !bcrypt.compareSync(current_password, user.password_hash)) {
+      return res.status(401).json({ error: 'הסיסמה הנוכחית שגויה' });
+    }
+    const hash = bcrypt.hashSync(new_password, 10);
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('change-password:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });

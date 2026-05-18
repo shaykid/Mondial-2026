@@ -21,6 +21,34 @@ async function main() {
     const tableName = (ddl.match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/) || [])[1] || '?';
     console.log(`   ✓ ${tableName}`);
   }
+  const phoneCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'phone_number'
+  `);
+  if (!phoneCol.n) {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN phone_number VARCHAR(32) NULL AFTER name
+    `);
+    console.log('   ✓ users.phone_number');
+  }
+  const deptCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'department'
+  `);
+  if (!deptCol.n) {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN department VARCHAR(120) NULL AFTER phone_number
+    `);
+    console.log('   ✓ users.department');
+  }
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 

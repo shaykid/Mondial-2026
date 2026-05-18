@@ -8,6 +8,8 @@ module.exports = [
     id            INT             AUTO_INCREMENT PRIMARY KEY,
     email         VARCHAR(190)    NOT NULL UNIQUE,
     name          VARCHAR(120)    NOT NULL,
+    phone_number  VARCHAR(32)     NULL,
+    department    VARCHAR(120)    NULL,
     password_hash VARCHAR(120)    NOT NULL,
     is_admin      TINYINT(1)      NOT NULL DEFAULT 0,
     created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP

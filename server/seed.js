@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const teams = require('./data/teams');
 const matches = require('./data/matches');
+const { DEFAULT_DEPARTMENTS } = require('./lib/departments');
 
 // ממיר ISO UTC ('2026-06-11T19:00:00Z') לפורמט DATETIME של MySQL ('2026-06-11 19:00:00')
 function isoToMysql(iso) {
@@ -81,7 +82,8 @@ async function seed() {
     ['scoring_runner_up', '10'],
     ['scoring_top_scorer','15'],
     ['lock_hours_before', process.env.LOCK_HOURS_BEFORE || '1'],
-    ['scraper_mode',      process.env.SCRAPER_MODE || 'manual']
+    ['scraper_mode',      process.env.SCRAPER_MODE || 'manual'],
+    ['departments',       JSON.stringify(DEFAULT_DEPARTMENTS)]
   ];
   // INSERT IGNORE - אם המנהל כבר ערך הגדרה ידנית, נשמר ערכו הקיים.
   for (const [k, v] of settings) {

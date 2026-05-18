@@ -9,6 +9,7 @@ import Flag from '../components/Flag';
 const TABS = [
   { id: 'overview',  label: 'סקירה'    },
   { id: 'users',     label: 'משתמשים'  },
+  { id: 'departments', label: 'מחלקות' },
   { id: 'matches',   label: 'משחקים'   },
   { id: 'settings',  label: 'הגדרות'   },
   { id: 'actions',   label: 'פעולות'   }
@@ -36,6 +37,7 @@ export default function Admin() {
 
       {tab === 'overview' && <OverviewTab />}
       {tab === 'users'    && <UsersTab    />}
+      {tab === 'departments' && <DepartmentsTab />}
       {tab === 'matches'  && <MatchesTab  />}
       {tab === 'settings' && <SettingsTab />}
       {tab === 'actions'  && <ActionsTab  />}
@@ -82,16 +84,58 @@ function OverviewTab() {
 /* ─────────────── משתמשים ─────────────── */
 function UsersTab() {
   const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(null);
+  const [importFile, setImportFile] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoResult, setDemoResult] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [editNotice, setEditNotice] = useState('');
+  const [resetNotice, setResetNotice] = useState('');
 
   const load = () => {
-    api.get('/admin/users')
-      .then(r => setUsers(r.data))
+    setErr('');
+    Promise.all([
+      api.get('/admin/users'),
+      api.get('/admin/departments')
+    ])
+      .then(([usersRes, departmentsRes]) => {
+        setUsers(usersRes.data);
+        setDepartments(departmentsRes.data.departments || []);
+      })
       .catch(e => setErr(errMsg(e)));
   };
 
   useEffect(load, []);
+
+  const openEdit = (user) => {
+    setErr('');
+    setEditNotice('');
+    setResetNotice('');
+    setEditingUser(user);
+    setEditDraft({
+      name: user.name || '',
+      email: user.email || '',
+      phone_number: user.phone_number || '',
+      department: user.department || ''
+    });
+  };
+
+  const closeEdit = () => {
+    setEditingUser(null);
+    setEditDraft(null);
+    setEditBusy(false);
+    setResetBusy(false);
+    setEditNotice('');
+    setResetNotice('');
+  };
 
   const remove = async (id, name) => {
     if (!confirm(`למחוק את ${name}? פעולה זו אינה הפיכה.`)) return;
@@ -106,9 +150,205 @@ function UsersTab() {
     }
   };
 
+  const saveUser = async () => {
+    if (!editingUser || !editDraft) return;
+    setEditBusy(true);
+    setErr('');
+    setEditNotice('');
+    setResetNotice('');
+    try {
+      const payload = {
+        name: editDraft.name,
+        email: editDraft.email,
+        phone_number: editDraft.phone_number,
+        department: editDraft.department
+      };
+      const { data } = await api.patch(`/admin/users/${editingUser.id}`, payload);
+      setEditNotice('הנתונים נשמרו בהצלחה');
+      if (data?.user) {
+        setEditingUser(data.user);
+        setEditDraft({
+          name: data.user.name || '',
+          email: data.user.email || '',
+          phone_number: data.user.phone_number || '',
+          department: data.user.department || ''
+        });
+      }
+      load();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    if (!editingUser) return;
+    if (!confirm(`לאפס סיסמה עבור ${editingUser.name}?`)) return;
+    setResetBusy(true);
+    setErr('');
+    setResetNotice('');
+    try {
+      const { data } = await api.post(`/admin/users/${editingUser.id}/reset-password`);
+      setResetNotice(`הסיסמה אופסה: ${data.password}`);
+      load();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const download = async (format) => {
+    setExporting(format);
+    setErr('');
+    setImportResult(null);
+    try {
+      const { data } = await api.get(`/admin/users/export?format=${format}`, { responseType: 'blob' });
+      const blob = new Blob([data], {
+        type: format === 'csv'
+          ? 'text/csv;charset=utf-8'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `users.${format === 'csv' ? 'csv' : 'xlsx'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const importUsers = async () => {
+    if (!importFile) {
+      setErr('יש לבחור קובץ לייבוא');
+      return;
+    }
+    setImporting(true);
+    setErr('');
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      const { data } = await api.post('/admin/users/import', formData);
+      setImportResult(data);
+      setImportFile(null);
+      load();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = [
+      'שם מלא,email (username),password,phone number,מחלקה',
+      'משתמש בדיקה 01,demo01@company.local,,050-555-1001,שיווק'
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'users-import-template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const createDemoUsers = async () => {
+    if (!confirm('ליצור/לעדכן 10 משתמשי דמו עם כל הניחושים?')) return;
+    setDemoBusy(true);
+    setErr('');
+    setDemoResult(null);
+    try {
+      const { data } = await api.post('/admin/users/demo');
+      setDemoResult(data);
+      load();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setDemoBusy(false);
+    }
+  };
+
   return (
     <div>
       {err && <div className="alert alert-error">{err}</div>}
+      {importResult && (
+        <div className="alert alert-success">
+          ייבוא הושלם: {importResult.created} נוצרו, {importResult.updated} עודכנו, {importResult.skipped} דולגו.
+          {importResult.generated?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong>סיסמאות שנוצרו אוטומטית:</strong>
+              <div style={{ marginTop: 8, maxHeight: 220, overflow: 'auto', background: 'rgba(255,255,255,0.5)', padding: 12, borderRadius: 4 }}>
+                {importResult.generated.map(item => (
+                  <div key={`${item.email}-${item.password}`} style={{ marginBottom: 8 }}>
+                    <div>{item.name} · {item.email} · {item.department || '—'}</div>
+                    <div style={{ fontFamily: 'monospace' }}>{item.password}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {demoResult && (
+        <div className="alert alert-success">
+          נוצרו/עודכנו {demoResult.users} משתמשי דמו ו-{demoResult.predictions} ניחושים.
+          {demoResult.generated?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong>פרטי כניסה לדמו:</strong>
+              <div style={{ marginTop: 8, maxHeight: 220, overflow: 'auto', background: 'rgba(255,255,255,0.5)', padding: 12, borderRadius: 4 }}>
+                {demoResult.generated.map(item => (
+                  <div key={item.email} style={{ marginBottom: 8 }}>
+                    <div>{item.name} · {item.email} · {item.department || '—'}</div>
+                    <div style={{ fontFamily: 'monospace' }}>
+                      {item.password} · {item.phone_number || '—'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <button className="btn btn-sm btn-gold" onClick={() => download('csv')} disabled={exporting !== null}>
+          {exporting === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
+        </button>
+        <button className="btn btn-sm btn-outline" onClick={() => download('xlsx')} disabled={exporting !== null}>
+          {exporting === 'xlsx' ? 'מייצא...' : 'ייצוא XLSX'}
+        </button>
+        <button className="btn btn-sm btn-outline" onClick={downloadTemplate}>
+          הורד תבנית
+        </button>
+        <label className="btn btn-sm btn-pitch" style={{ overflow: 'hidden', position: 'relative' }}>
+          <input
+            type="file"
+            accept=".csv,.xls,.xlsx"
+            onChange={e => setImportFile(e.target.files?.[0] || null)}
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+          />
+          {importFile ? `קובץ: ${importFile.name}` : 'בחר קובץ לייבוא'}
+        </label>
+        <button className="btn btn-sm btn-pitch" onClick={importUsers} disabled={importing || !importFile}>
+          {importing ? 'מייבא...' : 'ייבוא משתמשים'}
+        </button>
+        <button className="btn btn-sm btn-gold" onClick={createDemoUsers} disabled={demoBusy}>
+          {demoBusy ? 'יוצר...' : 'צור 10 משתמשי דמו'}
+        </button>
+      </div>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -6, marginBottom: 16 }}>
+        ביצוא, עמודת הסיסמה נשארת ריקה כי המערכת שומרת רק גיבוב סיסמה.
+      </p>
       <div style={{
         background: 'var(--paper-pure)',
         border: '1px solid var(--line)',
@@ -121,6 +361,8 @@ function UsersTab() {
               <th>#</th>
               <th>שם</th>
               <th>אימייל</th>
+              <th>טלפון</th>
+              <th>מחלקה</th>
               <th>ניחושים</th>
               <th>נרשם בתאריך</th>
               <th>תפקיד</th>
@@ -133,6 +375,8 @@ function UsersTab() {
                 <td>{u.id}</td>
                 <td><strong>{u.name}</strong></td>
                 <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{u.email}</td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{u.phone_number || '—'}</td>
+                <td style={{ fontSize: 13 }}>{u.department || '—'}</td>
                 <td>{u.num_predictions}</td>
                 <td style={{ fontSize: 12, color: 'var(--muted)' }}>
                   {new Date(u.created_at).toLocaleDateString('he-IL')}
@@ -144,6 +388,11 @@ function UsersTab() {
                   }
                 </td>
                 <td>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    style={{ marginInlineEnd: 8 }}
+                    onClick={() => openEdit(u)}
+                  >ערוך</button>
                   {!u.is_admin && (
                     <button
                       className="btn btn-sm"
@@ -163,6 +412,205 @@ function UsersTab() {
           אין משתמשים רשומים עדיין
         </p>
       )}
+
+      {editingUser && editDraft && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(11, 18, 32, 0.55)',
+          display: 'grid',
+          placeItems: 'center',
+          padding: 16,
+          zIndex: 50
+        }}>
+          <div style={{
+            width: 'min(720px, 100%)',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            background: 'var(--paper-pure)',
+            borderRadius: 12,
+            border: '1px solid var(--line)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.28)',
+            padding: 24
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'start' }}>
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 6, fontFamily: 'var(--font-display)' }}>
+                  עריכת משתמש
+                </h3>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                  {editingUser.name} · {editingUser.email}
+                </div>
+              </div>
+              <button className="btn btn-sm btn-outline" onClick={closeEdit}>סגור</button>
+            </div>
+
+            {editNotice && <div className="alert alert-success" style={{ marginTop: 16 }}>{editNotice}</div>}
+            {resetNotice && (
+              <div className="alert alert-success" style={{ marginTop: 12, wordBreak: 'break-all' }}>
+                {resetNotice}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+              <div className="field">
+                <label>שם מלא</label>
+                <input
+                  type="text"
+                  value={editDraft.name}
+                  onChange={e => setEditDraft(s => ({ ...s, name: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>אימייל</label>
+                <input
+                  type="email"
+                  value={editDraft.email}
+                  onChange={e => setEditDraft(s => ({ ...s, email: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>טלפון</label>
+                <input
+                  type="text"
+                  value={editDraft.phone_number}
+                  onChange={e => setEditDraft(s => ({ ...s, phone_number: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>מחלקה</label>
+                <input
+                  list="department-options"
+                  type="text"
+                  value={editDraft.department}
+                  onChange={e => setEditDraft(s => ({ ...s, department: e.target.value }))}
+                  placeholder="בחר/הקלד מחלקה"
+                />
+              </div>
+            </div>
+
+            <datalist id="department-options">
+              {departments.map(dep => (
+                <option key={dep} value={dep} />
+              ))}
+            </datalist>
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 20 }}>
+              <button className="btn btn-pitch" onClick={saveUser} disabled={editBusy}>
+                {editBusy ? 'שומר...' : 'שמור שינויים'}
+              </button>
+              <button className="btn btn-outline" onClick={resetPassword} disabled={resetBusy}>
+                {resetBusy ? 'מאפס...' : 'איפוס סיסמה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────── מחלקות ─────────────── */
+function DepartmentsTab() {
+  const [departments, setDepartments] = useState([]);
+  const [draft, setDraft] = useState([]);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => {
+    setErr('');
+    setOk('');
+    api.get('/admin/departments')
+      .then(r => {
+        const list = r.data.departments || [];
+        setDepartments(list);
+        setDraft(list.length ? list : ['']);
+      })
+      .catch(e => setErr(errMsg(e)));
+  };
+
+  useEffect(load, []);
+
+  const update = (index, value) => {
+    setDraft(items => items.map((item, i) => (i === index ? value : item)));
+  };
+
+  const addRow = () => setDraft(items => [...items, '']);
+  const removeRow = (index) => setDraft(items => items.filter((_, i) => i !== index));
+
+  const save = async () => {
+    const clean = draft.map(item => item.trim()).filter(Boolean);
+    if (!clean.length) {
+      setErr('יש להזין לפחות מחלקה אחת');
+      return;
+    }
+    setBusy(true);
+    setErr('');
+    setOk('');
+    try {
+      const { data } = await api.post('/admin/departments', { departments: clean });
+      const list = data.departments || clean;
+      setDepartments(list);
+      setDraft(list.length ? list : ['']);
+      setOk('המחלקות נשמרו בהצלחה');
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      {err && <div className="alert alert-error">{err}</div>}
+      {ok && <div className="alert alert-success">{ok}</div>}
+
+      <div style={{
+        background: 'var(--paper-pure)',
+        border: '1px solid var(--line)',
+        borderRadius: 6,
+        padding: 24
+      }}>
+        <h3 style={{
+          marginTop: 0,
+          marginBottom: 8,
+          fontFamily: 'var(--font-display)',
+          fontSize: 22,
+          letterSpacing: 1,
+          color: 'var(--ink)'
+        }}>ניהול מחלקות</h3>
+        <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
+          הרשימה הזו משמשת את טופס המשתמשים, ייבוא קבצים ועריכת פרטי משתמשים.
+        </p>
+
+        <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+          {draft.map((value, index) => (
+            <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={value}
+                onChange={e => update(index, e.target.value)}
+                placeholder={`מחלקה ${index + 1}`}
+              />
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => removeRow(index)}
+                disabled={draft.length === 1}
+              >
+                מחק
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
+          <button className="btn btn-sm btn-outline" onClick={addRow}>הוסף מחלקה</button>
+          <button className="btn btn-gold" onClick={save} disabled={busy}>
+            {busy ? 'שומר...' : 'שמור מחלקות'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
