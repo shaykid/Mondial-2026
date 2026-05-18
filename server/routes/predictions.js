@@ -22,12 +22,35 @@ router.get('/my', auth(), async (req, res) => {
       ORDER BY m.kickoff ASC
     `, [req.user.id]);
 
-    const special = await db.one(
-      'SELECT * FROM special_predictions WHERE user_id = ?', [req.user.id]
-    );
+    const special = await db.one(`
+      SELECT sp.*,
+        p.name_en AS top_scorer_name_en,
+        p.name_he AS top_scorer_name_he,
+        p.country_en AS top_scorer_country_en,
+        p.country_he AS top_scorer_country_he,
+        p.image_url AS top_scorer_image_url
+      FROM special_predictions sp
+      LEFT JOIN players p ON p.id = sp.top_scorer_player_id
+      WHERE sp.user_id = ?
+    `, [req.user.id]);
     res.json({ predictions: preds, special: special || null });
   } catch (e) {
     console.error('predictions/my:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// רשימת שחקנים לבחירה (מלך השערים)
+router.get('/players', auth(), async (req, res) => {
+  try {
+    const rows = await db.query(`
+      SELECT id, name_en, name_he, country_en, country_he, image_url, team_code
+      FROM players
+      ORDER BY name_en ASC
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error('predictions/players:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });
@@ -73,7 +96,7 @@ router.post('/match/:id', auth(), async (req, res) => {
 // ניחושים מיוחדים (אלופה, סגן, מלך)
 router.post('/special', auth(), async (req, res) => {
   try {
-    const { champion_code, runner_up_code, top_scorer } = req.body || {};
+    const { champion_code, runner_up_code, top_scorer, top_scorer_player_id } = req.body || {};
 
     // נעילה בזמן בעיטת הפתיחה של המונדיאל
     const opener = await db.one(`SELECT MIN(kickoff) AS k FROM matches`);
@@ -85,15 +108,29 @@ router.post('/special', auth(), async (req, res) => {
       }
     }
 
+    let topScorerPlayerId = null;
+    let topScorerText = top_scorer || null;
+    if (top_scorer_player_id != null && top_scorer_player_id !== '') {
+      const pid = Number(top_scorer_player_id);
+      if (!Number.isInteger(pid) || pid <= 0) {
+        return res.status(400).json({ error: 'שחקן לא תקין' });
+      }
+      const player = await db.one('SELECT id, name_en FROM players WHERE id = ?', [pid]);
+      if (!player) return res.status(400).json({ error: 'שחקן לא נמצא' });
+      topScorerPlayerId = player.id;
+      topScorerText = player.name_en;
+    }
+
     await db.run(`
-      INSERT INTO special_predictions (user_id, champion_code, runner_up_code, top_scorer, submitted_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO special_predictions (user_id, champion_code, runner_up_code, top_scorer_player_id, top_scorer, submitted_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON DUPLICATE KEY UPDATE
         champion_code  = VALUES(champion_code),
         runner_up_code = VALUES(runner_up_code),
+        top_scorer_player_id = VALUES(top_scorer_player_id),
         top_scorer     = VALUES(top_scorer),
         submitted_at   = CURRENT_TIMESTAMP
-    `, [req.user.id, champion_code || null, runner_up_code || null, top_scorer || null]);
+    `, [req.user.id, champion_code || null, runner_up_code || null, topScorerPlayerId, topScorerText]);
 
     res.json({ ok: true });
   } catch (e) {

@@ -16,13 +16,13 @@ export default function Header() {
           <span className="brand-trophy">🏆</span>
           <div>
             <div>מונדיאל 2026</div>
-            <div className="brand-sub">ניחושי החברה</div>
+            <div className="brand-sub">ניחושי חברת שיח</div>
           </div>
         </div>
 
         <nav className="nav">
           <NavLink to="/" end className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>בית</NavLink>
-          <NavLink to="/predictions" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>הניחושים שלי</NavLink>
+          <NavLink to="/predictions" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>הניחושיח שלי</NavLink>
           <NavLink to="/matches" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>משחקים</NavLink>
           <NavLink to="/groups" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>בתים</NavLink>
           <NavLink to="/leaderboard" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>טבלת מצטיינים</NavLink>

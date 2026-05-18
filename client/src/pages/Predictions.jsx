@@ -10,11 +10,34 @@ function formatDateTime(iso) {
   };
 }
 
+function flagEmojiFromCode(code) {
+  if (!code) return '🏳️';
+  const c = String(code).toLowerCase();
+  const map = {
+    'gb-eng': '🏴', 'gb-sct': '🏴', 'gb-wls': '🏴', 'gb-nir': '🏴'
+  };
+  if (map[c]) return map[c];
+  const base = c.slice(0, 2);
+  if (!/^[a-z]{2}$/.test(base)) return '🏳️';
+  const A = 0x1F1E6;
+  return String.fromCodePoint(A + base.charCodeAt(0) - 97, A + base.charCodeAt(1) - 97);
+}
+
+function scoreTone(side, home, away) {
+  if (!Number.isInteger(home) || !Number.isInteger(away)) return '';
+  if (home === away) return 'score-equal';
+  if (side === 'home') return home > away ? 'score-high' : 'score-low';
+  return away > home ? 'score-high' : 'score-low';
+}
+
 export default function Predictions() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [predictions, setPredictions] = useState({});  // matchId -> {home, away, points, locked, saved}
   const [special, setSpecial] = useState({ champion_code: '', runner_up_code: '', top_scorer: '' });
+  const [players, setPlayers] = useState([]);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [specialDirty, setSpecialDirty] = useState(false);
   const [lockHours, setLockHours] = useState(1);
   const [tab, setTab] = useState('group');
@@ -27,10 +50,12 @@ export default function Predictions() {
     Promise.all([
       api.get('/matches'),
       api.get('/teams'),
-      api.get('/predictions/my')
-    ]).then(([m, t, p]) => {
+      api.get('/predictions/my'),
+      api.get('/predictions/players')
+    ]).then(([m, t, p, pl]) => {
       setMatches(m.data);
       setTeams(t.data);
+      setPlayers(pl.data || []);
       const pmap = {};
       for (const pr of p.data.predictions) {
         pmap[pr.match_id] = {
@@ -176,7 +201,7 @@ export default function Predictions() {
   return (
     <main className="page">
       <h1 className="page-title">
-        ה<span className="accent">ניחושים</span> שלי
+        הניחו<span className="word-shiach">שיח</span> שלי
       </h1>
       <p className="page-subtitle">
         השלמת {completedCount} מתוך {matches.length} משחקים · כל ניחוש נסגר {lockHours} שעה לפני בעיטת הפתיחה
@@ -202,7 +227,12 @@ export default function Predictions() {
       {tab === 'special' ? (
         <SpecialPredictions
           teams={teams}
+          players={players}
           special={special}
+          playerSearch={playerSearch}
+          setPlayerSearch={setPlayerSearch}
+          pickerOpen={pickerOpen}
+          setPickerOpen={setPickerOpen}
           setSpecial={(next) => {
             setSpecial(next);
             setSpecialDirty(true);
@@ -235,7 +265,7 @@ export default function Predictions() {
                     <div className="scores-block">
                       <input
                         type="number"
-                        className="score-input"
+                        className={`score-input ${scoreTone('home', p.home, p.away)}`}
                         min={0} max={30}
                         value={p.home ?? ''}
                         disabled={locked || finished}
@@ -244,7 +274,7 @@ export default function Predictions() {
                       <span className="dash">:</span>
                       <input
                         type="number"
-                        className="score-input"
+                        className={`score-input ${scoreTone('away', p.home, p.away)}`}
                         min={0} max={30}
                         value={p.away ?? ''}
                         disabled={locked || finished}
@@ -284,31 +314,66 @@ export default function Predictions() {
   );
 }
 
-function SpecialPredictions({ teams, special, setSpecial, onSave, saving }) {
+function SpecialPredictions({ teams, players, special, setSpecial, onSave, saving, playerSearch, setPlayerSearch, pickerOpen, setPickerOpen }) {
+  const champion = teams.find(t => t.code === special.champion_code);
+  const runnerUp = teams.find(t => t.code === special.runner_up_code);
+  const selectedPlayer = players.find(p => p.id === special.top_scorer_player_id);
+  const filteredPlayers = players.filter(p => {
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return true;
+    return String(p.name_en || '').toLowerCase().includes(q)
+      || String(p.name_he || '').toLowerCase().includes(q)
+      || String(p.country_en || '').toLowerCase().includes(q)
+      || String(p.country_he || '').toLowerCase().includes(q);
+  });
   return (
+    <>
     <div style={{display:'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', maxWidth: 900}}>
-      <div className="stat-card" style={{borderTop:'4px solid var(--gold)'}}>
+      <div className="stat-card" style={{borderTop:'4px solid var(--gold)', position:'relative', zIndex:1}}>
         <div className="label">🏆 אלופת המונדיאל</div>
         <p style={{fontSize:13, color:'var(--muted)', margin:'4px 0 12px'}}>20 נקודות בניחוש מדויק</p>
+        {champion && (
+          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8, fontSize:13}}>
+            <Flag code={champion.code} size="sm" title={champion.name_he} />
+            <span>{champion.name_he}</span>
+          </div>
+        )}
         <select className="field" value={special.champion_code || ''} onChange={e => setSpecial({...special, champion_code: e.target.value})} style={{width:'100%', padding:12}}>
           <option value="">בחר נבחרת...</option>
-          {teams.map(t => <option key={t.code} value={t.code}>{t.name_he}</option>)}
+          {teams.map(t => <option key={t.code} value={t.code}>{flagEmojiFromCode(t.code)} {t.name_he}</option>)}
         </select>
       </div>
 
-      <div className="stat-card" style={{borderTop:'4px solid #c9d1d9'}}>
+      <div className="stat-card" style={{borderTop:'4px solid #c9d1d9', position:'relative', zIndex:1}}>
         <div className="label">🥈 סגנית האלופה</div>
         <p style={{fontSize:13, color:'var(--muted)', margin:'4px 0 12px'}}>10 נקודות בניחוש מדויק</p>
+        {runnerUp && (
+          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8, fontSize:13}}>
+            <Flag code={runnerUp.code} size="sm" title={runnerUp.name_he} />
+            <span>{runnerUp.name_he}</span>
+          </div>
+        )}
         <select className="field" value={special.runner_up_code || ''} onChange={e => setSpecial({...special, runner_up_code: e.target.value})} style={{width:'100%', padding:12}}>
           <option value="">בחר נבחרת...</option>
-          {teams.map(t => <option key={t.code} value={t.code}>{t.name_he}</option>)}
+          {teams.map(t => <option key={t.code} value={t.code}>{flagEmojiFromCode(t.code)} {t.name_he}</option>)}
         </select>
       </div>
 
       <div className="stat-card" style={{borderTop:'4px solid var(--crimson)'}}>
         <div className="label">👑 מלך השערים</div>
         <p style={{fontSize:13, color:'var(--muted)', margin:'4px 0 12px'}}>15 נקודות בניחוש מדויק</p>
-        <input className="field" placeholder="שם השחקן (באנגלית)" value={special.top_scorer || ''} onChange={e => setSpecial({...special, top_scorer: e.target.value})} style={{width:'100%', padding:12}} />
+        {selectedPlayer ? (
+          <div style={{display:'flex', gap:10, alignItems:'center', marginBottom:10}}>
+            {selectedPlayer.image_url && <img src={selectedPlayer.image_url} alt={selectedPlayer.name_en} style={{width:44, height:44, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--line)'}} />}
+            <div style={{lineHeight:1.2}}>
+              <div style={{fontWeight:700}}>{selectedPlayer.name_he}</div>
+              <div style={{fontSize:12, color:'var(--muted)'}}>{selectedPlayer.name_en} · {selectedPlayer.country_he || selectedPlayer.country_en || ''}</div>
+            </div>
+          </div>
+        ) : <div style={{fontSize:13, color:'var(--muted)', marginBottom:10}}>לא נבחר שחקן</div>}
+        <button className="btn btn-outline" onClick={() => setPickerOpen(true)} type="button">
+          בחר שחקן
+        </button>
       </div>
 
       <div style={{gridColumn: '1 / -1'}}>
@@ -317,5 +382,46 @@ function SpecialPredictions({ teams, special, setSpecial, onSave, saving }) {
         </button>
       </div>
     </div>
+    {pickerOpen && (
+      <div className="player-picker-overlay" onClick={() => setPickerOpen(false)}>
+        <div className="player-picker-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="player-picker-head">
+            <h3>בחירת מלך השערים</h3>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => setPickerOpen(false)}>סגור</button>
+          </div>
+          <input
+            className="field"
+            placeholder="חיפוש שחקן / מדינה"
+            value={playerSearch}
+            onChange={e => setPlayerSearch(e.target.value)}
+            style={{width:'100%', padding:12, marginBottom:12}}
+          />
+          <div className="player-list">
+            {filteredPlayers.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                className={`player-item ${special.top_scorer_player_id === p.id ? 'active' : ''}`}
+                onClick={() => {
+                  setSpecial({ ...special, top_scorer_player_id: p.id, top_scorer: p.name_en });
+                  setPickerOpen(false);
+                }}
+              >
+                {p.image_url ? <img src={p.image_url} alt={p.name_en} /> : <span className="player-avatar-fallback">👤</span>}
+                <span className="player-item-text">
+                  <strong>{p.name_he}</strong>
+                  <small>
+                    {p.name_en} · {p.country_he || p.country_en || ''}
+                    {p.team_code ? <span style={{display:'inline-flex', alignItems:'center', gap:6, marginInlineStart:8}}><Flag code={p.team_code} size="sm" title={p.country_he || p.country_en || p.name_en} /></span> : null}
+                  </small>
+                </span>
+              </button>
+            ))}
+            {filteredPlayers.length === 0 && <div style={{padding: 12, color:'var(--muted)'}}>אין תוצאות</div>}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

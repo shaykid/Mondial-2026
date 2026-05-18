@@ -49,6 +49,20 @@ async function main() {
     `);
     console.log('   ✓ users.department');
   }
+  const topScorerPlayerCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'special_predictions'
+      AND column_name = 'top_scorer_player_id'
+  `);
+  if (!topScorerPlayerCol.n) {
+    await db.query(`
+      ALTER TABLE special_predictions
+      ADD COLUMN top_scorer_player_id INT NULL AFTER runner_up_code
+    `);
+    console.log('   ✓ special_predictions.top_scorer_player_id');
+  }
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 

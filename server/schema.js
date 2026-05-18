@@ -25,6 +25,23 @@ module.exports = [
     INDEX idx_teams_group (group_letter)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
+  // ────────── שחקנים ──────────
+  `CREATE TABLE IF NOT EXISTS players (
+    id            INT             AUTO_INCREMENT PRIMARY KEY,
+    external_id   INT             NULL UNIQUE,
+    name_en       VARCHAR(160)    NOT NULL,
+    name_he       VARCHAR(160)    NOT NULL,
+    country_en    VARCHAR(120)    NULL,
+    country_he    VARCHAR(120)    NULL,
+    team_code     VARCHAR(10)     NULL,
+    image_url     VARCHAR(500)    NULL,
+    created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_players_name_en (name_en),
+    INDEX idx_players_country_en (country_en),
+    CONSTRAINT fk_players_team FOREIGN KEY (team_code) REFERENCES teams(code) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
   // ────────── משחקים ──────────
   // status: scheduled / live / finished
   `CREATE TABLE IF NOT EXISTS matches (
@@ -66,9 +83,11 @@ module.exports = [
     user_id        INT            NOT NULL PRIMARY KEY,
     champion_code  VARCHAR(10)    NULL,
     runner_up_code VARCHAR(10)    NULL,
+    top_scorer_player_id INT      NULL,
     top_scorer     VARCHAR(120)   NULL,
     submitted_at   DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_special_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_special_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_special_player FOREIGN KEY (top_scorer_player_id) REFERENCES players(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
   // ────────── הגדרות מערכת ──────────
