@@ -9,6 +9,7 @@ module.exports = [
     email         VARCHAR(190)    NOT NULL UNIQUE,
     name          VARCHAR(120)    NOT NULL,
     phone_number  VARCHAR(32)     NULL,
+    profile_image_url VARCHAR(500) NULL,
     department    VARCHAR(120)    NULL,
     password_hash VARCHAR(120)    NOT NULL,
     is_admin      TINYINT(1)      NOT NULL DEFAULT 0,

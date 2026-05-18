@@ -13,6 +13,7 @@ function sanitize(user) {
     email: user.email,
     name: user.name,
     phone_number: user.phone_number || '',
+    profile_image_url: user.profile_image_url || '',
     department: user.department || '',
     isAdmin: !!user.is_admin,
     createdAt: user.created_at
@@ -95,6 +96,26 @@ router.post('/change-password', auth(), async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('change-password:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// עדכון פרופיל בסיסי (טלפון + תמונת פרופיל)
+router.post('/profile', auth(), async (req, res) => {
+  try {
+    const phone = String(req.body?.phone_number || '').trim();
+    const image = String(req.body?.profile_image_url || '').trim();
+    if (image && !/^https?:\/\/.+/i.test(image)) {
+      return res.status(400).json({ error: 'קישור תמונה חייב להתחיל ב-http/https' });
+    }
+    await db.run(
+      'UPDATE users SET phone_number = ?, profile_image_url = ? WHERE id = ?',
+      [phone || null, image || null, req.user.id]
+    );
+    const user = await db.one('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    res.json({ ok: true, user: sanitize(user) });
+  } catch (e) {
+    console.error('profile-update:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Flag from '../components/Flag';
@@ -10,6 +9,10 @@ export default function Home() {
   const [matches, setMatches] = useState([]);
   const [myPredictions, setMyPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [editingMatchId, setEditingMatchId] = useState(null);
+  const [draft, setDraft] = useState({ home: '', away: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     api.get('/matches').then(r => setMatches(r.data)).catch(() => {});
@@ -22,9 +25,49 @@ export default function Home() {
     .slice(0, 4);
 
   const predictedIds = new Set(myPredictions.map(p => p.match_id));
+  const predictionMap = Object.fromEntries(
+    myPredictions.map(p => [p.match_id, p])
+  );
   const upcomingUnpredicted = upcoming.filter(m => !predictedIds.has(m.id));
 
   const myRank = leaderboard.find(r => r.id === user.id);
+
+  const isLocked = (m) => {
+    const kickoff = new Date(m.kickoff).getTime();
+    return Date.now() >= kickoff - 3600 * 1000 || m.status === 'finished';
+  };
+
+  const openEditor = (m) => {
+    const p = predictionMap[m.id];
+    setDraft({
+      home: Number.isInteger(p?.home_score) ? p.home_score : '',
+      away: Number.isInteger(p?.away_score) ? p.away_score : ''
+    });
+    setEditingMatchId(m.id);
+    setMsg('');
+  };
+
+  const savePrediction = async (m) => {
+    const home = Number(draft.home);
+    const away = Number(draft.away);
+    if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0 || home > 30 || away > 30) {
+      setMsg('יש להזין תוצאה תקינה (0-30)');
+      return;
+    }
+    setSaving(true);
+    setMsg('');
+    try {
+      await api.post(`/predictions/match/${m.id}`, { home_score: home, away_score: away });
+      const updated = await api.get('/predictions/my');
+      setMyPredictions(updated.data.predictions || []);
+      setEditingMatchId(null);
+      setMsg('✓ הניחוש נשמר');
+    } catch (e) {
+      setMsg(e?.response?.data?.error || 'שגיאה בשמירה');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className="page">
@@ -57,19 +100,70 @@ export default function Home() {
         <span className="badge">UP NEXT</span>
       </div>
 
+      {msg && <div className={`alert ${msg.startsWith('✓') ? 'alert-success' : 'alert-error'}`}>{msg}</div>}
+
       {upcoming.length === 0 ? (
         <p className="editorial" style={{color:'var(--muted)'}}>אין משחקים קרובים כרגע.</p>
       ) : (
         <div style={{display: 'grid', gap: 12}}>
-          {upcoming.map(m => (
-            <MatchCard key={m.id} match={m}>
-              {!predictedIds.has(m.id) ? (
-                <Link to="/predictions" className="btn btn-gold btn-sm">השלם ניחוש →</Link>
-              ) : (
-                <span style={{color:'var(--pitch)', fontWeight:600, fontSize:14}}>✓ נוחש</span>
-              )}
-            </MatchCard>
-          ))}
+          {upcoming.map(m => {
+            const hasPrediction = predictedIds.has(m.id);
+            const p = predictionMap[m.id];
+            const locked = isLocked(m);
+            const inEdit = editingMatchId === m.id;
+            return (
+              <MatchCard key={m.id} match={m}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
+                  {hasPrediction ? (
+                    <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14}}>
+                      הניחוש שלי: {p.home_score} - {p.away_score}
+                    </span>
+                  ) : (
+                    <span style={{color:'var(--muted)', fontWeight:600, fontSize:14}}>
+                      אין ניחוש עדיין
+                    </span>
+                  )}
+
+                  {!locked && !inEdit && (
+                    <button type="button" className="btn btn-gold btn-sm" onClick={() => openEditor(m)}>
+                      {hasPrediction ? 'ערוך ניחוש' : 'השלם ניחוש'}
+                    </button>
+                  )}
+                  {locked && (
+                    <span style={{color:'var(--muted)', fontSize:13}}>🔒 הניחוש נעול (פחות משעה לפתיחה)</span>
+                  )}
+                </div>
+
+                {inEdit && (
+                  <div style={{marginTop:12, display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      className="score-input"
+                      value={draft.home}
+                      onChange={(e) => setDraft(prev => ({ ...prev, home: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    />
+                    <span className="dash">:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      className="score-input"
+                      value={draft.away}
+                      onChange={(e) => setDraft(prev => ({ ...prev, away: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    />
+                    <button type="button" className="btn btn-pitch btn-sm" onClick={() => savePrediction(m)} disabled={saving}>
+                      {saving ? 'שומר...' : 'שמור'}
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingMatchId(null)} disabled={saving}>
+                      ביטול
+                    </button>
+                  </div>
+                )}
+              </MatchCard>
+            );
+          })}
         </div>
       )}
 

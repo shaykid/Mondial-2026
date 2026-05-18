@@ -36,8 +36,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateProfile = async ({ phone_number, profile_image_url }) => {
+    const { data } = await api.post('/auth/profile', { phone_number, profile_image_url });
+    if (data?.user) setUser(data.user);
+    return data?.user || null;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

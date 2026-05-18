@@ -49,6 +49,20 @@ async function main() {
     `);
     console.log('   ✓ users.department');
   }
+  const profileImageCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'profile_image_url'
+  `);
+  if (!profileImageCol.n) {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN profile_image_url VARCHAR(500) NULL AFTER phone_number
+    `);
+    console.log('   ✓ users.profile_image_url');
+  }
   const topScorerPlayerCol = await db.one(`
     SELECT COUNT(*) AS n
     FROM information_schema.columns
