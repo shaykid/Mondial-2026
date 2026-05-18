@@ -8,7 +8,8 @@ export default defineConfig({
     port: 5225,
     allowedHosts: true,
     proxy: {
-      '/api': 'http://localhost:5222'
+      '/api': 'http://localhost:5222',
+      '/data': 'http://localhost:5222'
     }
   },
   build: {
