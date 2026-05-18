@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Header() {
   const { user, logout, updateProfile } = useAuth();
@@ -11,6 +11,7 @@ export default function Header() {
   const [imageName, setImageName] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
 
   if (!user) return null;
 
@@ -35,6 +36,16 @@ export default function Header() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!imageFile) {
+      setPreviewUrl('');
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
 
   return (
     <>
@@ -86,6 +97,17 @@ export default function Header() {
             </div>
             <div className="field">
               <label>תמונת פרופיל</label>
+              <div style={{marginBottom:10}}>
+                {(previewUrl || user?.profile_image_url) ? (
+                  <img
+                    src={previewUrl || user?.profile_image_url}
+                    alt="profile preview"
+                    style={{width:72, height:72, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--line-bold)', background:'var(--paper-dim)'}}
+                  />
+                ) : (
+                  <div style={{width:72, height:72, borderRadius:'50%', border:'2px solid var(--line-bold)', background:'var(--paper-dim)', display:'grid', placeItems:'center', color:'var(--muted)'}}>👤</div>
+                )}
+              </div>
               <input
                 type="file"
                 accept="image/*"

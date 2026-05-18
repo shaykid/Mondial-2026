@@ -13,6 +13,19 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
+async function ensureProfileImageColumn() {
+  const col = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'profile_image_url'
+  `);
+  if (!col?.n) {
+    await db.query('ALTER TABLE users ADD COLUMN profile_image_url VARCHAR(500) NULL AFTER phone_number');
+  }
+}
+
 // helper - אל תשלח החוצה password_hash
 function sanitize(user) {
   return {
@@ -110,6 +123,7 @@ router.post('/change-password', auth(), async (req, res) => {
 // עדכון פרופיל בסיסי (טלפון + תמונת פרופיל)
 router.post('/profile', auth(), upload.single('profile_image'), async (req, res) => {
   try {
+    await ensureProfileImageColumn();
     const phone = String(req.body?.phone_number || '').trim();
     const user = await db.one('SELECT * FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'משתמש לא נמצא' });
@@ -138,7 +152,7 @@ router.post('/profile', auth(), upload.single('profile_image'), async (req, res)
     res.json({ ok: true, user: sanitize(updatedUser) });
   } catch (e) {
     console.error('profile-update:', e);
-    res.status(500).json({ error: 'שגיאת שרת' });
+    res.status(500).json({ error: `שגיאת שרת: ${e.message}` });
   }
 });
 
