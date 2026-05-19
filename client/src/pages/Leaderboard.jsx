@@ -40,7 +40,14 @@ export default function Leaderboard() {
                   </span>
                 </td>
                 <td>
-                  <strong>{r.name}</strong>
+                  <div className="leaderboard-user">
+                    {r.profile_image_url ? (
+                      <img className="leaderboard-avatar" src={r.profile_image_url} alt={r.name} />
+                    ) : (
+                      <div className="leaderboard-avatar leaderboard-avatar-fallback">{(r.name || '?').slice(0, 1)}</div>
+                    )}
+                    <strong>{r.name}</strong>
+                  </div>
                   {r.id === user.id && <span style={{marginInlineStart: 8, color:'var(--gold-deep)', fontSize: 11, letterSpacing:'.15em'}}>· זה אני</span>}
                 </td>
                 <td style={{textAlign:'center', color:'var(--muted)'}}>{r.num_predictions}</td>
