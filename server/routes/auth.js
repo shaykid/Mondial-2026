@@ -12,6 +12,26 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
 });
+let authColumnsReady = false;
+
+function normalizePhone(value) {
+  return String(value || '').replace(/\D+/g, '');
+}
+
+async function ensureAuthColumns() {
+  if (authColumnsReady) return;
+  const phoneLoginCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'password_changed'
+  `);
+  if (!phoneLoginCol?.n) {
+    await db.query('ALTER TABLE users ADD COLUMN password_changed TINYINT(1) NOT NULL DEFAULT 0 AFTER password_hash');
+  }
+  authColumnsReady = true;
+}
 
 async function ensureProfileImageColumn() {
   const col = await db.one(`
@@ -43,6 +63,7 @@ function sanitize(user) {
 // הרשמה
 router.post('/register', async (req, res) => {
   try {
+    await ensureAuthColumns();
     const { email, name, password, phone_number, department } = req.body || {};
     if (!email || !name || !password) {
       return res.status(400).json({ error: 'כל השדות נדרשים' });
@@ -56,7 +77,7 @@ router.post('/register', async (req, res) => {
 
     const hash = bcrypt.hashSync(password, 10);
     const r = await db.run(
-      `INSERT INTO users (email, name, phone_number, department, password_hash, is_admin) VALUES (?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO users (email, name, phone_number, department, password_hash, password_changed, is_admin) VALUES (?, ?, ?, ?, ?, 1, 0)`,
       [lower, name.trim(), (phone_number || '').trim() || null, (department || '').trim() || null, hash]
     );
     const user = await db.one('SELECT * FROM users WHERE id = ?', [r.insertId]);
@@ -71,10 +92,18 @@ router.post('/register', async (req, res) => {
 // כניסה
 router.post('/login', async (req, res) => {
   try {
+    await ensureAuthColumns();
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'אימייל וסיסמה נדרשים' });
     const user = await db.one('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user) {
+      return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
+    }
+    const byPasswordHash = bcrypt.compareSync(password, user.password_hash);
+    const byPhoneFirstLogin = !Number(user.password_changed || 0)
+      && normalizePhone(password) !== ''
+      && normalizePhone(password) === normalizePhone(user.phone_number);
+    if (!byPasswordHash && !byPhoneFirstLogin) {
       return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
     }
     const token = signToken(user);
@@ -100,6 +129,7 @@ router.get('/me', auth(), async (req, res) => {
 // שינוי סיסמה
 router.post('/change-password', auth(), async (req, res) => {
   try {
+    await ensureAuthColumns();
     const { current_password, new_password } = req.body || {};
     if (!current_password || !new_password) {
       return res.status(400).json({ error: 'יש להזין סיסמה נוכחית וסיסמה חדשה' });
@@ -112,7 +142,7 @@ router.post('/change-password', auth(), async (req, res) => {
       return res.status(401).json({ error: 'הסיסמה הנוכחית שגויה' });
     }
     const hash = bcrypt.hashSync(new_password, 10);
-    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
+    await db.run('UPDATE users SET password_hash = ?, password_changed = 1 WHERE id = ?', [hash, req.user.id]);
     res.json({ ok: true });
   } catch (e) {
     console.error('change-password:', e);

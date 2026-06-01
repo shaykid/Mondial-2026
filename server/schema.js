@@ -12,6 +12,7 @@ module.exports = [
     profile_image_url VARCHAR(500) NULL,
     department    VARCHAR(120)    NULL,
     password_hash VARCHAR(120)    NOT NULL,
+    password_changed TINYINT(1)   NOT NULL DEFAULT 0,
     is_admin      TINYINT(1)      NOT NULL DEFAULT 0,
     created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,

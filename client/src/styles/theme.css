@@ -787,7 +787,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   background:
     linear-gradient(135deg, rgba(10,20,32,0.78), rgba(10,20,32,0.48)),
     url('/bck1.png');
-  background-size: cover, cover;
+  background-size: 100% 100%, 100% 100%;
   background-position: center center, center center;
   background-repeat: no-repeat;
   color: var(--paper);
@@ -851,7 +851,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   background:
     linear-gradient(rgba(245,240,230,0.44), rgba(245,240,230,0.44)),
     url('/bck2.png');
-  background-size: cover, cover;
+  background-size: 100% 100%, 100% 100%;
   background-position: center center, center center;
   background-repeat: no-repeat;
   padding: 60px;

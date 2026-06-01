@@ -44,6 +44,17 @@ function randomPassword(len = 12) {
 }
 
 async function run() {
+  const col = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'password_changed'
+  `);
+  if (!col?.n) {
+    await db.query('ALTER TABLE users ADD COLUMN password_changed TINYINT(1) NOT NULL DEFAULT 0 AFTER password_hash');
+  }
+
   const content = fs.readFileSync(FILE_PATH, 'utf8');
   const parsed = parseTSV(content);
   if (!parsed.length) {
@@ -89,7 +100,7 @@ async function run() {
       } else {
         const passwordHash = bcrypt.hashSync(randomPassword(), 10);
         await t.run(
-          'INSERT INTO users (email, name, phone_number, department, password_hash, is_admin) VALUES (?, ?, ?, ?, ?, 0)',
+          'INSERT INTO users (email, name, phone_number, department, password_hash, password_changed, is_admin) VALUES (?, ?, ?, ?, ?, 0, 0)',
           [email, name, row.phone || null, row.department || null, passwordHash]
         );
         created += 1;
@@ -118,4 +129,3 @@ run()
     console.error('fill-users failed:', err?.message || err);
     process.exit(1);
   });
-
