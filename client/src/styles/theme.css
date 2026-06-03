@@ -1175,6 +1175,22 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   .header-inner { flex-wrap: wrap; gap: 12px; padding: 12px 14px; }
   .nav { width: 100%; overflow-x: auto; }
   .nav-link { font-size: 14px; padding: 6px 10px; }
+  .news-ticker {
+    gap: 0;
+    width: 100%;
+    max-width: 100vw;
+  }
+  .news-ticker-label {
+    width: 82px;
+    min-width: 82px;
+    padding: 10px 8px;
+    font-size: 1.15rem;
+    text-align: center;
+  }
+  .news-ticker-track {
+    max-width: calc(100vw - 82px);
+    min-height: 52px;
+  }
   .news-ticker-content { animation-duration: 10s; }
   .news-ticker-content a { font-size: 18px; }
   .news-ticker-content a::after { padding-inline: 8px 14px; }
