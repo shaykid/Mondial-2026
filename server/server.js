@@ -13,9 +13,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use('/data', express.static(path.join(__dirname, '..', 'data')));
+app.use('/docs', express.static(path.join(__dirname, '..', 'docs')));
 
 // נתיבי API
 app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/news',         require('./routes/news'));
 app.use('/api',              require('./routes/matches'));
 app.use('/api/predictions',  require('./routes/predictions'));
 app.use('/api/leaderboard',  require('./routes/leaderboard'));

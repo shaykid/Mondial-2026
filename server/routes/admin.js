@@ -135,6 +135,40 @@ router.get('/users', async (req, res) => {
   }
 });
 
+// יצירת משתמש חדש ידנית
+router.post('/users', async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const phoneNumber = String(req.body?.phone_number || '').trim();
+    const department = String(req.body?.department || '').trim();
+    const password = String(req.body?.password || '').trim() || randomPassword(10);
+
+    if (!name || !email) {
+      return res.status(400).json({ error: 'שם מלא ואימייל הם שדות חובה' });
+    }
+    const exists = await db.one('SELECT id FROM users WHERE email = ?', [email]);
+    if (exists) return res.status(409).json({ error: 'אימייל זה כבר קיים במערכת' });
+
+    const hash = bcrypt.hashSync(password, 10);
+    const r = await db.run(
+      `INSERT INTO users (email, name, phone_number, department, password_hash, password_changed, is_admin)
+       VALUES (?, ?, ?, ?, ?, 0, 0)`,
+      [email, name, phoneNumber || null, department || null, hash]
+    );
+    const user = await db.one(`
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.created_at,
+        (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
+      FROM users u
+      WHERE u.id = ?
+    `, [r.insertId]);
+    res.json({ ok: true, user, password });
+  } catch (e) {
+    console.error('admin/create-user:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
 // רשימת מחלקות
 router.get('/departments', async (req, res) => {
   try {

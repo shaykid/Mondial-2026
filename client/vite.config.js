@@ -9,7 +9,8 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': 'http://localhost:5222',
-      '/data': 'http://localhost:5222'
+      '/data': 'http://localhost:5222',
+      '/docs': 'http://localhost:5222'
     }
   },
   build: {

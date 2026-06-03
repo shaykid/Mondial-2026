@@ -11,6 +11,7 @@ export default function Profile() {
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = useState('');
+  const [phoneDraft, setPhoneDraft] = useState(user?.phone_number || '');
   const [profileMsg, setProfileMsg] = useState('');
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
@@ -50,15 +51,19 @@ export default function Profile() {
     return () => URL.revokeObjectURL(url);
   }, [profileImageFile]);
 
-  const saveProfileImage = async () => {
+  useEffect(() => {
+    setPhoneDraft(user?.phone_number || '');
+  }, [user?.phone_number]);
+
+  const saveProfileDetails = async () => {
     setProfileMsg('');
     setProfileBusy(true);
     try {
-      await updateProfile({ profile_image_file: profileImageFile, phone_number: user?.phone_number || '' });
-      setProfileMsg('תמונת הפרופיל נשמרה');
+      await updateProfile({ profile_image_file: profileImageFile, phone_number: phoneDraft });
+      setProfileMsg('פרטי הפרופיל נשמרו');
       setProfileImageFile(null);
     } catch (e) {
-      setProfileMsg(errMsg(e, 'שגיאה בשמירת תמונה'));
+      setProfileMsg(errMsg(e, 'שגיאה בשמירת פרופיל'));
     } finally {
       setProfileBusy(false);
     }
@@ -83,9 +88,9 @@ export default function Profile() {
         </div>
 
         <div className="stat-card" style={{ borderTop: '4px solid var(--crimson)' }}>
-          <div className="label">תמונת פרופיל</div>
+          <div className="label">פרטי פרופיל</div>
           <p style={{ color: 'var(--muted)', marginTop: 8 }}>
-            ניתן להעלות תמונה חדשה ולהחליף את הקיימת.
+            ניתן לעדכן טלפון ולהחליף את תמונת הפרופיל.
           </p>
 
           <div style={{margin: '12px 0'}}>
@@ -103,6 +108,15 @@ export default function Profile() {
           </div>
 
           <div className="field" style={{maxWidth: 420}}>
+            <label>טלפון</label>
+            <input
+              value={phoneDraft}
+              onChange={(e) => setPhoneDraft(e.target.value)}
+              placeholder="050-0000000"
+            />
+          </div>
+
+          <div className="field" style={{maxWidth: 420}}>
             <label>בחר תמונה חדשה</label>
             <input
               type="file"
@@ -113,8 +127,8 @@ export default function Profile() {
 
           {profileMsg && <div className={`alert ${profileMsg.includes('שגיאה') ? 'alert-error' : 'alert-success'}`}>{profileMsg}</div>}
 
-          <button className="btn btn-gold" type="button" onClick={saveProfileImage} disabled={profileBusy || !profileImageFile}>
-            {profileBusy ? <span className="spinner" /> : 'שמור תמונת פרופיל'}
+          <button className="btn btn-gold" type="button" onClick={saveProfileDetails} disabled={profileBusy}>
+            {profileBusy ? <span className="spinner" /> : 'שמור פרופיל'}
           </button>
         </div>
 

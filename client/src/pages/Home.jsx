@@ -31,6 +31,9 @@ export default function Home() {
   const upcomingUnpredicted = upcoming.filter(m => !predictedIds.has(m.id));
 
   const myRank = leaderboard.find(r => r.id === user.id);
+  const topScoredUsers = leaderboard
+    .filter((r) => Number(r.total_points || 0) > 3)
+    .slice(0, 5);
 
   const isLocked = (m) => {
     const kickoff = new Date(m.kickoff).getTime();
@@ -182,36 +185,37 @@ export default function Home() {
         </div>
       )}
 
-      <div className="section-divider">
-        <h2>טופ 5</h2>
-        <span className="badge">LEADERBOARD</span>
-      </div>
+      {topScoredUsers.length > 0 && (
+        <>
+          <div className="section-divider">
+            <h2>טופ 5</h2>
+            <span className="badge">LEADERBOARD</span>
+          </div>
 
-      <table className="leaderboard-table">
-        <thead>
-          <tr>
-            <th style={{width: 80}}>מקום</th>
-            <th>שחקן</th>
-            <th style={{width: 120, textAlign:'end'}}>נקודות</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leaderboard.slice(0, 5).map(r => (
-            <tr key={r.id} className={r.rank <= 3 ? `top-${r.rank}` : ''}>
-              <td>
-                <span className={`rank-medal ${r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':''}`}>
-                  {r.rank}
-                </span>
-              </td>
-              <td style={{fontWeight: 600}}>{r.name}</td>
-              <td style={{textAlign:'end'}}><span className="total-pts">{r.total_points}</span></td>
-            </tr>
-          ))}
-          {leaderboard.length === 0 && (
-            <tr><td colSpan={3} style={{textAlign:'center', color:'var(--muted)'}}>אין עדיין נתונים</td></tr>
-          )}
-        </tbody>
-      </table>
+          <table className="leaderboard-table">
+            <thead>
+              <tr>
+                <th style={{width: 80}}>מקום</th>
+                <th>שחקן</th>
+                <th style={{width: 120, textAlign:'end'}}>נקודות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topScoredUsers.map(r => (
+                <tr key={r.id} className={r.rank <= 3 ? `top-${r.rank}` : ''}>
+                  <td>
+                    <span className={`rank-medal ${r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':''}`}>
+                      {r.rank}
+                    </span>
+                  </td>
+                  <td style={{fontWeight: 600}}>{r.name}</td>
+                  <td style={{textAlign:'end'}}><span className="total-pts">{r.total_points}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </main>
   );
 }

@@ -10,6 +10,8 @@ export default function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptedDocs, setAcceptedDocs] = useState(false);
+  const [acceptedRanking, setAcceptedRanking] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -19,8 +21,15 @@ export default function Login() {
     e.preventDefault();
     setErr(''); setBusy(true);
     try {
-      if (mode === 'login') await login(email, password);
-      else await register(name, email, password);
+      if (mode === 'login') {
+        await login(email, password);
+      } else {
+        if (!acceptedDocs || !acceptedRanking) {
+          setErr('יש לאשר את התקנון, תנאי השימוש, מדיניות הפרטיות והצגת הדירוג לפני הרשמה');
+          return;
+        }
+        await register(name, email, password);
+      }
       nav('/');
     } catch (er) {
       setErr(errMsg(er, 'שגיאה בהתחברות'));
@@ -81,6 +90,18 @@ export default function Login() {
               <label>סיסמה</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} autoComplete={mode==='login' ? 'current-password' : 'new-password'} />
             </div>
+            {mode === 'register' && (
+              <div className="consent-box">
+                <label>
+                  <input type="checkbox" checked={acceptedDocs} onChange={e => setAcceptedDocs(e.target.checked)} />
+                  אני מאשר/ת שקראתי את תקנון המשחק, תנאי השימוש ומדיניות הפרטיות, ואני מסכים/ה להשתתף במשחק בהתאם להם.
+                </label>
+                <label>
+                  <input type="checkbox" checked={acceptedRanking} onChange={e => setAcceptedRanking(e.target.checked)} />
+                  אני מאשר/ת ששמי, מחלקתי, ניקודי ומיקומי בדירוג יוצגו למשתתפי המשחק ולעובדי החברה.
+                </label>
+              </div>
+            )}
             <button className="btn btn-gold" style={{width:'100%', justifyContent:'center', padding:'14px'}} disabled={busy}>
               {busy ? <span className="spinner" /> : (mode === 'login' ? 'כניסה למערכת' : 'יצירת חשבון')}
             </button>

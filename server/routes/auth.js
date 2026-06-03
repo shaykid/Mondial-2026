@@ -119,7 +119,7 @@ router.get('/me', auth(), async (req, res) => {
   try {
     const user = await db.one('SELECT * FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'משתמש לא נמצא' });
-    res.json({ user: sanitize(user) });
+    res.json({ user: sanitize(user), token: signToken(user) });
   } catch (e) {
     console.error('me:', e);
     res.status(500).json({ error: 'שגיאת שרת' });

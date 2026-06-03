@@ -148,6 +148,48 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   color: var(--paper);
 }
 
+.news-ticker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-bottom: 1px solid var(--line-bold);
+  overflow: hidden;
+}
+
+.news-ticker-label {
+  flex: 0 0 auto;
+  background: var(--gold);
+  color: var(--ink);
+  padding: 8px 16px;
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+.news-ticker-track {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.news-ticker-content {
+  display: inline-flex;
+  gap: 28px;
+  white-space: nowrap;
+  animation: ticker-move 45s linear infinite;
+}
+
+.news-ticker-content a {
+  color: var(--paper);
+  font-size: 14px;
+}
+
+@keyframes ticker-move {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -713,6 +755,77 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   font-size: 14px;
 }
 
+.site-footer {
+  max-width: 1280px;
+  margin: 48px auto 0;
+  padding: 18px 24px 28px;
+  color: var(--muted);
+  text-align: center;
+  border-top: 1px solid var(--line);
+}
+
+.site-footer button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px 6px;
+}
+
+.site-footer button:hover {
+  color: var(--pitch-deep);
+}
+
+.doc-modal-backdrop,
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 20, 32, 0.62);
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.doc-modal,
+.admin-modal {
+  width: min(920px, 96vw);
+  max-height: 92vh;
+  background: var(--paper-pure);
+  border-top: 4px solid var(--gold);
+  box-shadow: var(--shadow-lg);
+  padding: 18px;
+  overflow: auto;
+}
+
+.doc-modal-head,
+.admin-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.doc-modal-head h3,
+.admin-modal-head h3 {
+  margin: 0 0 12px;
+  font-size: 28px;
+}
+
+.doc-modal iframe {
+  width: 100%;
+  height: min(68vh, 720px);
+  border: 1px solid var(--line);
+  background: var(--paper-dim);
+  margin-bottom: 12px;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
 /* ─────────── כפתורים ─────────── */
 .btn {
   font-family: var(--font-display);
@@ -916,6 +1029,26 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   inset: auto 0 -2px 0;
   height: 3px;
   background: var(--gold);
+}
+
+.consent-box {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 18px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.consent-box label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.consent-box input {
+  width: auto;
+  margin-top: 4px;
 }
 
 /* ─────────── Error / Success ─────────── */

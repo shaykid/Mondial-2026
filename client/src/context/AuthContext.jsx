@@ -12,7 +12,10 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('mondial_token');
     if (!token) { setLoading(false); return; }
     api.get('/auth/me')
-      .then(r => setUser(r.data.user))
+      .then(r => {
+        if (r.data.token) localStorage.setItem('mondial_token', r.data.token);
+        setUser(r.data.user);
+      })
       .catch(() => localStorage.removeItem('mondial_token'))
       .finally(() => setLoading(false));
   }, []);

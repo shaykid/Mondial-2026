@@ -63,6 +63,20 @@ async function main() {
     `);
     console.log('   ✓ users.profile_image_url');
   }
+  const passwordChangedCol = await db.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'password_changed'
+  `);
+  if (!passwordChangedCol.n) {
+    await db.query(`
+      ALTER TABLE users
+      ADD COLUMN password_changed TINYINT(1) NOT NULL DEFAULT 0 AFTER password_hash
+    `);
+    console.log('   ✓ users.password_changed');
+  }
   const topScorerPlayerCol = await db.one(`
     SELECT COUNT(*) AS n
     FROM information_schema.columns

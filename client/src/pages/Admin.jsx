@@ -95,6 +95,10 @@ function UsersTab() {
   const [demoResult, setDemoResult] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createDraft, setCreateDraft] = useState({ name: '', email: '', phone_number: '', department: '', password: '' });
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createNotice, setCreateNotice] = useState('');
   const [editBusy, setEditBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [editNotice, setEditNotice] = useState('');
@@ -135,6 +139,34 @@ function UsersTab() {
     setResetBusy(false);
     setEditNotice('');
     setResetNotice('');
+  };
+
+  const openCreate = () => {
+    setErr('');
+    setCreateNotice('');
+    setCreateDraft({ name: '', email: '', phone_number: '', department: '', password: '' });
+    setCreatingUser(true);
+  };
+
+  const closeCreate = () => {
+    setCreatingUser(false);
+    setCreateBusy(false);
+    setCreateNotice('');
+  };
+
+  const createUser = async () => {
+    setCreateBusy(true);
+    setErr('');
+    setCreateNotice('');
+    try {
+      const { data } = await api.post('/admin/users', createDraft);
+      setCreateNotice(`משתמש נוצר. סיסמה: ${data.password}`);
+      load();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
   const remove = async (id, name) => {
@@ -321,6 +353,9 @@ function UsersTab() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <button className="btn btn-sm btn-gold" onClick={openCreate}>
+          הוסף משתמש
+        </button>
         <button className="btn btn-sm btn-gold" onClick={() => download('csv')} disabled={exporting !== null}>
           {exporting === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
         </button>
@@ -411,6 +446,48 @@ function UsersTab() {
         <p style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>
           אין משתמשים רשומים עדיין
         </p>
+      )}
+
+      {creatingUser && (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal">
+            <div className="admin-modal-head">
+              <div>
+                <h3>הוספת משתמש חדש</h3>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                  אם לא תוזן סיסמה, תיווצר סיסמה אוטומטית.
+                </div>
+              </div>
+              <button className="btn btn-sm btn-outline" onClick={closeCreate}>סגור</button>
+            </div>
+            {createNotice && <div className="alert alert-success" style={{ marginTop: 16 }}>{createNotice}</div>}
+            <div className="admin-form-grid">
+              <div className="field">
+                <label>שם מלא</label>
+                <input value={createDraft.name} onChange={e => setCreateDraft(s => ({ ...s, name: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label>אימייל</label>
+                <input type="email" value={createDraft.email} onChange={e => setCreateDraft(s => ({ ...s, email: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label>טלפון</label>
+                <input value={createDraft.phone_number} onChange={e => setCreateDraft(s => ({ ...s, phone_number: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label>מחלקה</label>
+                <input list="department-options" value={createDraft.department} onChange={e => setCreateDraft(s => ({ ...s, department: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label>סיסמה</label>
+                <input value={createDraft.password} onChange={e => setCreateDraft(s => ({ ...s, password: e.target.value }))} placeholder="ריק = יצירה אוטומטית" />
+              </div>
+            </div>
+            <button className="btn btn-pitch" onClick={createUser} disabled={createBusy}>
+              {createBusy ? 'יוצר...' : 'צור משתמש'}
+            </button>
+          </div>
+        </div>
       )}
 
       {editingUser && editDraft && (

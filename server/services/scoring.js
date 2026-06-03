@@ -60,14 +60,14 @@ async function leaderboard() {
   const exactWeight = await getSettingNum('scoring_exact', 5);
   const rows = await db.query(`
     SELECT
-      u.id, u.name, u.email, u.phone_number, u.profile_image_url,
+      u.id, u.name, u.profile_image_url,
       COALESCE(SUM(p.points), 0) AS match_points,
       COUNT(p.id) AS num_predictions,
       SUM(CASE WHEN p.points = ? THEN 1 ELSE 0 END) AS exact_hits
     FROM users u
     LEFT JOIN predictions p ON p.user_id = u.id
     WHERE u.is_admin = 0
-    GROUP BY u.id, u.name, u.email, u.phone_number, u.profile_image_url
+    GROUP BY u.id, u.name, u.profile_image_url
   `, [exactWeight]);
 
   // המרת מספרים שמגיעים כמחרוזות ב-MySQL/JS (SUM/COUNT)
