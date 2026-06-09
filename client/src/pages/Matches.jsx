@@ -4,11 +4,23 @@ import MatchCard from '../components/MatchCard';
 
 export default function Matches() {
   const [matches, setMatches] = useState([]);
+  const [myPredictions, setMyPredictions] = useState([]);
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    api.get('/matches').then(r => setMatches(r.data));
+    Promise.all([
+      api.get('/matches'),
+      api.get('/predictions/my')
+    ]).then(([matchesRes, predictionsRes]) => {
+      setMatches(matchesRes.data);
+      setMyPredictions(predictionsRes.data.predictions || []);
+    });
   }, []);
+
+  const predictionMap = useMemo(
+    () => Object.fromEntries(myPredictions.map((p) => [p.match_id, p])),
+    [myPredictions]
+  );
 
   const groups = useMemo(() => {
     const list = matches.filter(m => {
@@ -50,7 +62,34 @@ export default function Matches() {
             {new Date(day).toLocaleDateString('he-IL', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}
           </div>
           <div style={{display: 'grid', gap: 12}}>
-            {dayMatches.map(m => <MatchCard key={m.id} match={m} />)}
+            {dayMatches.map(m => {
+              const prediction = predictionMap[m.id];
+              const hasPrediction = prediction && Number.isInteger(prediction.home_score) && Number.isInteger(prediction.away_score);
+              const showPoints = hasPrediction && m.status === 'finished';
+              const points = Number(prediction?.points || 0);
+
+              return (
+                <MatchCard key={m.id} match={m}>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
+                    {hasPrediction ? (
+                      <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14}}>
+                        הניחוש שלי: {prediction.home_score} - {prediction.away_score}
+                      </span>
+                    ) : (
+                      <span style={{color:'var(--muted)', fontWeight:600, fontSize:14}}>
+                        אין ניחוש שלי למשחק זה
+                      </span>
+                    )}
+
+                    {showPoints && (
+                      <span className={`points-pill ${points >= 5 ? 'exact' : points >= 3 ? 'high' : 'zero'}`}>
+                        {points} נק׳
+                      </span>
+                    )}
+                  </div>
+                </MatchCard>
+              );
+            })}
           </div>
         </div>
       ))}

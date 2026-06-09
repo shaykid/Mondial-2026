@@ -3,12 +3,15 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const fs = require('fs');
 const multer = require('multer');
+const path = require('path');
 const XLSX = require('xlsx');
 const db = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { updateMatchScore, runDailyUpdate } = require('../services/scraper');
 const { recalcForMatch } = require('../services/scoring');
+const { seedScheduleItems } = require('../lib/schedule-items');
 const {
   DEFAULT_DEPARTMENTS,
   departmentForDemoUser,
@@ -162,6 +165,32 @@ function runMysqlImport(sqlBuffer) {
   });
 }
 
+function normalizeNullable(value) {
+  const text = String(value ?? '').trim();
+  return text ? text : null;
+}
+
+async function replaceScheduleAsset(itemId, fieldName, file, suffix) {
+  const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+  const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
+  const rootDir = path.join(__dirname, '..', '..', 'data', 'schedule_items');
+  const baseDir = path.join(rootDir, `item-${itemId}`);
+  await fs.promises.mkdir(rootDir, { recursive: true });
+  await fs.promises.mkdir(baseDir, { recursive: true });
+  const fileName = `${suffix}-${Date.now()}${safeExt}`;
+  const fullPath = path.join(baseDir, fileName);
+  await fs.promises.writeFile(fullPath, file.buffer);
+
+  const files = await fs.promises.readdir(baseDir);
+  await Promise.all(
+    files
+      .filter((name) => name.startsWith(`${suffix}-`) && name !== fileName)
+      .map((name) => fs.promises.unlink(path.join(baseDir, name)).catch(() => null))
+  );
+
+  return `/data/schedule_items/item-${itemId}/${fileName}`;
+}
+
 router.use(auth(), adminOnly);
 
 // סיכום מצב המערכת
@@ -241,6 +270,110 @@ router.get('/departments', async (req, res) => {
   } catch (e) {
     console.error('admin/departments/get:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.get('/schedule-items', async (req, res) => {
+  try {
+    await db.tx(async (t) => seedScheduleItems(t));
+    const rows = await db.query(`
+      SELECT
+        s.*,
+        u.id AS winner_id,
+        u.name AS winner_name,
+        u.email AS winner_email,
+        u.profile_image_url AS winner_profile_image_url
+      FROM schedule_items s
+      LEFT JOIN users u ON u.id = s.winner_user_id
+      ORDER BY s.sort_order ASC, s.start_at ASC, s.id ASC
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error('admin/schedule-items/get:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.post('/schedule-items/:id', upload.fields([
+  { name: 'prize_image', maxCount: 1 },
+  { name: 'popup_image', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'שורה לא תקינה' });
+    }
+
+    const current = await db.one('SELECT * FROM schedule_items WHERE id = ?', [id]);
+    if (!current) return res.status(404).json({ error: 'שורת לוז לא נמצאה' });
+
+    const title = String(req.body?.title || '').trim();
+    const dateLabel = String(req.body?.date_label || '').trim();
+    const description = String(req.body?.description || '').trim();
+    const startAt = String(req.body?.start_at || '').trim();
+    const endAt = String(req.body?.end_at || '').trim();
+    const sortOrder = Number.parseInt(req.body?.sort_order, 10);
+    const prizeSlotRaw = String(req.body?.prize_slot || '').trim();
+    const winnerUserIdRaw = String(req.body?.winner_user_id || '').trim();
+    const popupEnabled = String(req.body?.popup_enabled || '') === '1';
+    const popupTitle = normalizeNullable(req.body?.popup_title);
+
+    if (!title || !dateLabel || !description || !startAt || !endAt || !Number.isInteger(sortOrder)) {
+      return res.status(400).json({ error: 'יש למלא כותרת, תאריך, תיאור, טווח תאריכים וסדר תצוגה' });
+    }
+
+    const startAtSql = startAt.length === 10 ? `${startAt} 00:00:00` : startAt.replace('T', ' ') + ':00';
+    const endAtSql = endAt.length === 10 ? `${endAt} 23:59:59` : endAt.replace('T', ' ') + ':00';
+    const prizeSlot = prizeSlotRaw ? Number.parseInt(prizeSlotRaw, 10) : null;
+    const winnerUserId = winnerUserIdRaw ? Number.parseInt(winnerUserIdRaw, 10) : null;
+    if (winnerUserId != null && !Number.isInteger(winnerUserId)) {
+      return res.status(400).json({ error: 'זוכה לא תקין' });
+    }
+
+    let prizeImageUrl = current.prize_image_url || null;
+    let popupImageUrl = current.popup_image_url || null;
+    const prizeFile = req.files?.prize_image?.[0];
+    const popupFile = req.files?.popup_image?.[0];
+
+    if (prizeFile) prizeImageUrl = await replaceScheduleAsset(id, 'prize_image_url', prizeFile, 'prize');
+    if (popupFile) popupImageUrl = await replaceScheduleAsset(id, 'popup_image_url', popupFile, 'popup');
+
+    await db.run(`
+      UPDATE schedule_items
+      SET title = ?, date_label = ?, description = ?, start_at = ?, end_at = ?, sort_order = ?,
+          prize_slot = ?, winner_user_id = ?, prize_image_url = ?, popup_enabled = ?, popup_title = ?, popup_image_url = ?
+      WHERE id = ?
+    `, [
+      title,
+      dateLabel,
+      description,
+      startAtSql,
+      endAtSql,
+      sortOrder,
+      Number.isInteger(prizeSlot) ? prizeSlot : null,
+      winnerUserId,
+      prizeImageUrl,
+      popupEnabled ? 1 : 0,
+      popupTitle,
+      popupImageUrl,
+      id
+    ]);
+
+    const updated = await db.one(`
+      SELECT
+        s.*,
+        u.id AS winner_id,
+        u.name AS winner_name,
+        u.email AS winner_email,
+        u.profile_image_url AS winner_profile_image_url
+      FROM schedule_items s
+      LEFT JOIN users u ON u.id = s.winner_user_id
+      WHERE s.id = ?
+    `, [id]);
+    res.json({ ok: true, item: updated });
+  } catch (e) {
+    console.error('admin/schedule-items/save:', e);
+    res.status(500).json({ error: 'שמירת שורת הלוז נכשלה' });
   }
 });
 

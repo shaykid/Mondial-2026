@@ -12,6 +12,7 @@ const TABS = [
   { id: 'departments', label: 'מחלקות' },
   { id: 'matches',   label: 'משחקים'   },
   { id: 'settings',  label: 'הגדרות'   },
+  { id: 'schedule',  label: 'לוז ופרסים' },
   { id: 'actions',   label: 'פעולות'   }
 ];
 
@@ -40,6 +41,7 @@ export default function Admin() {
       {tab === 'departments' && <DepartmentsTab />}
       {tab === 'matches'  && <MatchesTab  />}
       {tab === 'settings' && <SettingsTab />}
+      {tab === 'schedule' && <ScheduleTab />}
       {tab === 'actions'  && <ActionsTab  />}
     </div>
   );
@@ -1191,6 +1193,201 @@ function ActionsTab() {
           במהלך הטורניר (11 ביוני - 20 ביולי 2026) - כל שעתיים.<br />
           המצב הנוכחי נקבע על-ידי <strong>scraper_mode</strong> בהגדרות.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleTab() {
+  const [items, setItems] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [drafts, setDrafts] = useState({});
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const [savingId, setSavingId] = useState(null);
+
+  const load = () => {
+    setErr('');
+    Promise.all([
+      api.get('/admin/schedule-items'),
+      api.get('/admin/users')
+    ]).then(([itemsRes, usersRes]) => {
+      const nextItems = itemsRes.data || [];
+      setItems(nextItems);
+      setUsers((usersRes.data || []).filter((u) => !u.is_admin));
+      setDrafts(Object.fromEntries(nextItems.map((item) => [item.id, {
+        title: item.title || '',
+        date_label: item.date_label || '',
+        description: item.description || '',
+        start_at: String(item.start_at || '').slice(0, 10),
+        end_at: String(item.end_at || '').slice(0, 10),
+        sort_order: item.sort_order ?? 0,
+        prize_slot: item.prize_slot ?? '',
+        winner_user_id: item.winner_user_id ?? '',
+        popup_enabled: !!item.popup_enabled,
+        popup_title: item.popup_title || '',
+        prize_image_file: null,
+        popup_image_file: null,
+        prize_image_url: item.prize_image_url || '',
+        popup_image_url: item.popup_image_url || ''
+      }])));
+    }).catch((e) => setErr(errMsg(e)));
+  };
+
+  useEffect(load, []);
+
+  const upd = (id, key, value) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [key]: value }
+    }));
+  };
+
+  const save = async (id) => {
+    const draft = drafts[id];
+    if (!draft) return;
+    setSavingId(id);
+    setErr('');
+    setOk('');
+    try {
+      const form = new FormData();
+      form.append('title', draft.title);
+      form.append('date_label', draft.date_label);
+      form.append('description', draft.description);
+      form.append('start_at', draft.start_at);
+      form.append('end_at', draft.end_at);
+      form.append('sort_order', String(draft.sort_order ?? 0));
+      form.append('prize_slot', draft.prize_slot === '' ? '' : String(draft.prize_slot));
+      form.append('winner_user_id', draft.winner_user_id === '' ? '' : String(draft.winner_user_id));
+      form.append('popup_enabled', draft.popup_enabled ? '1' : '0');
+      form.append('popup_title', draft.popup_title || '');
+      if (draft.prize_image_file) form.append('prize_image', draft.prize_image_file);
+      if (draft.popup_image_file) form.append('popup_image', draft.popup_image_file);
+
+      const { data } = await api.post(`/admin/schedule-items/${id}`, form);
+      const item = data.item;
+      setItems((prev) => prev.map((entry) => entry.id === id ? item : entry));
+      setDrafts((prev) => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          prize_image_file: null,
+          popup_image_file: null,
+          prize_image_url: item.prize_image_url || '',
+          popup_image_url: item.popup_image_url || '',
+          winner_user_id: item.winner_user_id ?? '',
+          popup_title: item.popup_title || '',
+          popup_enabled: !!item.popup_enabled
+        }
+      }));
+      setOk(`שורה "${item.title}" נשמרה בהצלחה`);
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 1120 }}>
+      {err && <div className="alert alert-error">{err}</div>}
+      {ok && <div className="alert alert-success">{ok}</div>}
+
+      <div style={{ display: 'grid', gap: 16 }}>
+        {items.map((item) => {
+          const draft = drafts[item.id];
+          if (!draft) return null;
+          return (
+            <div key={item.id} style={{
+              background: 'var(--paper-pure)',
+              border: '1px solid var(--line)',
+              borderRadius: 6,
+              padding: 24
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 24 }}>{draft.title}</h3>
+                  <p style={{ margin: '6px 0 0', color: 'var(--muted)' }}>{draft.date_label}</p>
+                </div>
+                <button className="btn btn-gold" onClick={() => save(item.id)} disabled={savingId === item.id}>
+                  {savingId === item.id ? 'שומר...' : 'שמור שורה'}
+                </button>
+              </div>
+
+              <div className="admin-form-grid">
+                <div className="field">
+                  <label>שלב</label>
+                  <input type="text" value={draft.title} onChange={(e) => upd(item.id, 'title', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>תצוגת תאריכים</label>
+                  <input type="text" value={draft.date_label} onChange={(e) => upd(item.id, 'date_label', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>מה קורה</label>
+                  <input type="text" value={draft.description} onChange={(e) => upd(item.id, 'description', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>סדר תצוגה</label>
+                  <input type="number" value={draft.sort_order} onChange={(e) => upd(item.id, 'sort_order', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>תאריך התחלה</label>
+                  <input type="date" value={draft.start_at} onChange={(e) => upd(item.id, 'start_at', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>תאריך סיום</label>
+                  <input type="date" value={draft.end_at} onChange={(e) => upd(item.id, 'end_at', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>פרס</label>
+                  <select value={draft.prize_slot} onChange={(e) => upd(item.id, 'prize_slot', e.target.value)}>
+                    <option value="">ללא פרס</option>
+                    <option value="1">פרס 1</option>
+                    <option value="2">פרס 2</option>
+                    <option value="3">פרס 3</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>זוכה בפרס</label>
+                  <select value={draft.winner_user_id} onChange={(e) => upd(item.id, 'winner_user_id', e.target.value)}>
+                    <option value="">טרם נקבע</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>{user.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>כותרת פופאפ</label>
+                  <input type="text" value={draft.popup_title} onChange={(e) => upd(item.id, 'popup_title', e.target.value)} />
+                </div>
+                <div className="field" style={{ justifyContent: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={draft.popup_enabled}
+                      onChange={(e) => upd(item.id, 'popup_enabled', e.target.checked)}
+                    />
+                    הפעל פופאפ בתאריכים האלה
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 18 }}>
+                <div className="field">
+                  <label>תמונת פרס</label>
+                  <input type="file" accept="image/*" onChange={(e) => upd(item.id, 'prize_image_file', e.target.files?.[0] || null)} />
+                  {draft.prize_image_url && <img src={draft.prize_image_url} alt={draft.title} className="schedule-admin-preview" />}
+                </div>
+                <div className="field">
+                  <label>תמונת פופאפ</label>
+                  <input type="file" accept="image/*" onChange={(e) => upd(item.id, 'popup_image_file', e.target.files?.[0] || null)} />
+                  {draft.popup_image_url && <img src={draft.popup_image_url} alt={draft.popup_title || draft.title} className="schedule-admin-preview" />}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

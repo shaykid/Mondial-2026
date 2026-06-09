@@ -19,6 +19,7 @@ app.use('/docs', express.static(path.join(__dirname, '..', 'docs')));
 app.use('/api/auth',         require('./routes/auth'));
 app.use('/api/news',         require('./routes/news'));
 app.use('/api',              require('./routes/matches'));
+app.use('/api/schedule',     require('./routes/schedule'));
 app.use('/api/predictions',  require('./routes/predictions'));
 app.use('/api/leaderboard',  require('./routes/leaderboard'));
 app.use('/api/admin',        require('./routes/admin'));

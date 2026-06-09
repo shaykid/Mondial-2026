@@ -359,6 +359,145 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 .player-item-text strong { font-size: 15px; }
 .player-item-text small { color: var(--muted); }
 
+.schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: start;
+}
+
+.schedule-table-card,
+.schedule-next-card,
+.prize-card {
+  background: var(--paper-pure);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
+}
+
+.schedule-table-card {
+  overflow: hidden;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.schedule-table th,
+.schedule-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.schedule-table th {
+  background: rgba(0, 38, 43, 0.06);
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+.schedule-table tr.passed td {
+  background: rgba(45, 110, 62, 0.12);
+}
+
+.schedule-next-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  min-height: 116px;
+}
+
+.schedule-next-arrow {
+  font-family: var(--font-display);
+  font-size: 48px;
+  color: var(--gold-deep);
+  line-height: 1;
+}
+
+.schedule-next-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-next-copy strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+
+.schedule-next-copy small {
+  color: var(--muted);
+}
+
+.prize-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.prize-card {
+  padding: 0;
+  text-align: center;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.prize-card img,
+.prize-placeholder {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.prize-placeholder {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(197, 146, 10, 0.2), rgba(0, 38, 43, 0.08));
+  font-family: var(--font-display);
+  font-size: 34px;
+  color: var(--ink);
+}
+
+.prize-card-label {
+  padding: 14px 12px;
+  font-family: var(--font-display);
+  font-size: 22px;
+}
+
+.prize-modal-image,
+.schedule-popup-image,
+.schedule-admin-preview {
+  width: 100%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--paper-dim);
+}
+
+.prize-modal-image,
+.schedule-popup-image {
+  margin-top: 14px;
+  max-height: 60vh;
+}
+
+.schedule-admin-preview {
+  margin-top: 10px;
+  aspect-ratio: 4 / 3;
+}
+
+.winner-panel {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 18px;
+}
+
+.schedule-popup-modal {
+  width: min(760px, 96vw);
+}
+
 .user-chip {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 14px;
@@ -1174,6 +1313,11 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   .header-inner { flex-wrap: wrap; gap: 12px; padding: 12px 14px; }
   .nav { width: 100%; overflow-x: auto; }
   .nav-link { font-size: 14px; padding: 6px 10px; }
+  .schedule-layout { grid-template-columns: 1fr; }
+  .schedule-next-card { min-height: 0; }
+  .prize-grid { grid-template-columns: 1fr; }
+  .schedule-table th,
+  .schedule-table td { padding: 12px 10px; font-size: 14px; }
   .news-ticker {
     display: grid;
     grid-template-columns: 82px minmax(0, 1fr);
