@@ -16,6 +16,7 @@ export default function Admin() {
     { id: 'departments', label: t('admin.tab_departments') },
     { id: 'matches', label: t('admin.tab_matches') },
     { id: 'settings', label: t('admin.tab_settings') },
+    { id: 'messages', label: 'שליחת הודעות' },
     { id: 'schedule', label: t('admin.tab_schedule') },
     { id: 'actions', label: t('admin.tab_actions') }
   ];
@@ -42,6 +43,7 @@ export default function Admin() {
       {tab === 'departments' && <DepartmentsTab />}
       {tab === 'matches'  && <MatchesTab  />}
       {tab === 'settings' && <SettingsTab />}
+      {tab === 'messages' && <MessagesTab />}
       {tab === 'schedule' && <ScheduleTab />}
       {tab === 'actions'  && <ActionsTab  />}
     </div>
@@ -1072,6 +1074,67 @@ function SettingsTab() {
         </div>
       </SettingsCard>
 
+      <SettingsCard title="SMTP / שליחת אימיילים">
+        <div className="admin-form-grid">
+          <div className="field">
+            <label>שרת SMTP</label>
+            <input
+              type="text"
+              value={draft.smtp_server ?? ''}
+              onChange={e => upd('smtp_server', e.target.value)}
+              placeholder="smtp.inbox.co.il"
+            />
+          </div>
+          <div className="field">
+            <label>פורט SMTP</label>
+            <input
+              type="number"
+              value={draft.smtp_port ?? '587'}
+              onChange={e => upd('smtp_port', e.target.value)}
+              placeholder="587"
+            />
+          </div>
+          <div className="field">
+            <label>אבטחה</label>
+            <select
+              value={draft.smtp_security ?? 'STARTTLS'}
+              onChange={e => upd('smtp_security', e.target.value)}
+            >
+              <option value="STARTTLS">STARTTLS</option>
+              <option value="SSL">SSL</option>
+              <option value="NONE">ללא</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>משתמש/כתובת שולחת</label>
+            <input
+              type="text"
+              value={draft.smtp_user ?? ''}
+              onChange={e => upd('smtp_user', e.target.value)}
+              placeholder="mon2026@reports.seach.co.il"
+            />
+          </div>
+          <div className="field">
+            <label>סיסמת SMTP</label>
+            <input
+              type="text"
+              value={draft.smtp_password ?? ''}
+              onChange={e => upd('smtp_password', e.target.value)}
+              placeholder="********"
+            />
+          </div>
+          <div className="field">
+            <label>כתובת האתר</label>
+            <input
+              type="text"
+              value={draft.site_url ?? ''}
+              onChange={e => upd('site_url', e.target.value)}
+              placeholder="https://mon2026.seach.co.il"
+            />
+          </div>
+        </div>
+      </SettingsCard>
+
       <SettingsCard title="מסמכי פוטר">
         <div style={{ display: 'grid', gap: 16 }}>
           {footerDocs.filter((doc) => doc.doc_key !== 'contact').map((doc) => {
@@ -1211,6 +1274,230 @@ function NumField({ label, value, onChange }) {
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function MessagesTab() {
+  const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [draft, setDraft] = useState({
+    subject: '',
+    body: '',
+    department: '',
+    include_login_details: true,
+    attachments: []
+  });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/admin/users'),
+      api.get('/admin/departments')
+    ])
+      .then(([usersRes, depRes]) => {
+        const nextUsers = (usersRes.data || []).filter((u) => !u.is_admin);
+        setUsers(nextUsers);
+        setDepartments(depRes.data?.departments || []);
+      })
+      .catch((e) => setErr(errMsg(e)));
+  }, []);
+
+  const visibleUsers = users.filter((user) => {
+    if (draft.department && user.department !== draft.department) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return String(user.name || '').toLowerCase().includes(q)
+      || String(user.email || '').toLowerCase().includes(q)
+      || String(user.department || '').toLowerCase().includes(q);
+  });
+
+  const toggleUser = (id) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(Array.from(new Set([...selectedIds, ...visibleUsers.map((u) => u.id)])));
+  };
+
+  const clearVisible = () => {
+    const visibleSet = new Set(visibleUsers.map((u) => u.id));
+    setSelectedIds((prev) => prev.filter((id) => !visibleSet.has(id)));
+  };
+
+  const selectDepartment = () => {
+    if (!draft.department) return;
+    const ids = users.filter((u) => u.department === draft.department).map((u) => u.id);
+    setSelectedIds(Array.from(new Set([...selectedIds, ...ids])));
+  };
+
+  const sendEmails = async () => {
+    if (!draft.subject.trim() || !draft.body.trim()) {
+      setErr('יש להזין כותרת ותוכן הודעה');
+      return;
+    }
+    if (!selectedIds.length && !draft.department) {
+      setErr('יש לבחור לפחות נמען אחד, או לבחור מחלקה');
+      return;
+    }
+    if (!confirm('לשלוח את האימייל לנמענים שנבחרו?')) return;
+
+    setBusy(true);
+    setErr('');
+    setOk('');
+    try {
+      const form = new FormData();
+      form.append('subject', draft.subject);
+      form.append('body', draft.body);
+      form.append('department', draft.department || '');
+      form.append('include_login_details', draft.include_login_details ? '1' : '0');
+      form.append('recipient_ids', JSON.stringify(selectedIds));
+      Array.from(draft.attachments || []).forEach((file) => form.append('attachments', file));
+
+      const { data } = await api.post('/admin/send-emails', form);
+      setOk(`נשלחו ${data.sent} אימיילים בהצלחה`);
+      setDraft({
+        subject: '',
+        body: '',
+        department: '',
+        include_login_details: true,
+        attachments: []
+      });
+      setSelectedIds([]);
+      setSearch('');
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 1120 }}>
+      {err && <div className="alert alert-error">{err}</div>}
+      {ok && <div className="alert alert-success">{ok}</div>}
+
+      <SettingsCard title="הודעת אימייל">
+        <div className="admin-form-grid">
+          <div className="field">
+            <label>כותרת</label>
+            <input
+              type="text"
+              value={draft.subject}
+              onChange={(e) => setDraft((s) => ({ ...s, subject: e.target.value }))}
+              placeholder="כותרת ההודעה"
+            />
+          </div>
+          <div className="field">
+            <label>מחלקה</label>
+            <select
+              value={draft.department}
+              onChange={(e) => setDraft((s) => ({ ...s, department: e.target.value }))}
+            >
+              <option value="">כל המחלקות</option>
+              {departments.map((dep) => (
+                <option key={dep} value={dep}>{dep}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="field">
+          <label>גוף ההודעה</label>
+          <textarea
+            rows="8"
+            value={draft.body}
+            onChange={(e) => setDraft((s) => ({ ...s, body: e.target.value }))}
+            placeholder="תוכן האימייל"
+          />
+        </div>
+
+        <div className="field">
+          <label>תמונות / קבצים מצורפים</label>
+          <input
+            type="file"
+            multiple
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+            onChange={(e) => setDraft((s) => ({ ...s, attachments: Array.from(e.target.files || []) }))}
+          />
+          {draft.attachments.length > 0 && (
+            <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
+              {draft.attachments.map((file) => file.name).join(' | ')}
+            </div>
+          )}
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={draft.include_login_details}
+            onChange={(e) => setDraft((s) => ({ ...s, include_login_details: e.target.checked }))}
+          />
+          הוסף פרטי התחברות
+        </label>
+        <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>
+          אם מסומן, כל נמען יקבל גם את כתובת האתר, שם המשתמש שלו והסיסמה לפי מספר הטלפון שמוגדר באתר.
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="בחירת נמענים">
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <input
+            style={{ flex: '1 1 260px', minWidth: 220 }}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש לפי שם / אימייל / מחלקה"
+          />
+          <button className="btn btn-outline" type="button" onClick={selectAllVisible}>בחר הכל</button>
+          <button className="btn btn-outline" type="button" onClick={clearVisible}>נקה בחירה</button>
+          <button className="btn btn-pitch" type="button" onClick={selectDepartment} disabled={!draft.department}>בחר לפי מחלקה</button>
+        </div>
+
+        <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>
+          נבחרו {selectedIds.length} משתמשים
+        </div>
+
+        <div style={{ display: 'grid', gap: 8, maxHeight: 420, overflow: 'auto' }}>
+          {visibleUsers.map((user) => (
+            <label key={user.id} style={{
+              display: 'grid',
+              gridTemplateColumns: '24px 1fr',
+              gap: 12,
+              alignItems: 'start',
+              padding: 12,
+              border: '1px solid var(--line)',
+              borderRadius: 6,
+              background: selectedIds.includes(user.id) ? 'rgba(45,110,62,0.08)' : 'var(--paper-pure)'
+            }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(user.id)}
+                onChange={() => toggleUser(user.id)}
+              />
+              <div>
+                <div style={{ fontWeight: 700 }}>{user.name}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                  {user.email} | {user.phone_number || 'אין טלפון'} | {user.department || 'ללא מחלקה'}
+                </div>
+              </div>
+            </label>
+          ))}
+          {visibleUsers.length === 0 && (
+            <div style={{ color: 'var(--muted)' }}>אין משתמשים להצגה</div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <button className="btn btn-gold" type="button" onClick={sendEmails} disabled={busy}>
+            {busy ? 'שולח...' : 'שלח אימייל לנמענים'}
+          </button>
+        </div>
+      </SettingsCard>
     </div>
   );
 }

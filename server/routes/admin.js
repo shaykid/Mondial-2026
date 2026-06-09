@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
+const nodemailer = require('nodemailer');
 const XLSX = require('xlsx');
 const db = require('../db');
 const { auth, adminOnly } = require('../middleware/auth');
@@ -232,6 +233,42 @@ async function importBackupArchive(buffer) {
 function normalizeNullable(value) {
   const text = String(value ?? '').trim();
   return text ? text : null;
+}
+
+async function readSettingsMap(keys) {
+  if (!Array.isArray(keys) || !keys.length) return {};
+  const placeholders = keys.map(() => '?').join(', ');
+  const rows = await db.query(`SELECT \`key\`, \`value\` FROM settings WHERE \`key\` IN (${placeholders})`, keys);
+  const map = {};
+  for (const row of rows) map[row.key] = row.value;
+  return map;
+}
+
+function buildTransportConfig(settings) {
+  const security = String(settings.smtp_security || 'STARTTLS').trim().toUpperCase();
+  const port = Number(settings.smtp_port || 587);
+  const secure = security === 'SSL' || security === 'SMTPS' || port === 465;
+  return {
+    host: String(settings.smtp_server || '').trim(),
+    port,
+    secure,
+    requireTLS: security === 'STARTTLS',
+    auth: {
+      user: String(settings.smtp_user || '').trim(),
+      pass: String(settings.smtp_password || '')
+    }
+  };
+}
+
+function buildEmailHtml(body, extraLines) {
+  const bodyHtml = String(body || '')
+    .split(/\r?\n/)
+    .map((line) => `<div>${line || '&nbsp;'}</div>`)
+    .join('');
+  const extraHtml = extraLines.length
+    ? `<hr style="margin:18px 0;border:none;border-top:1px solid #d9d9d9" /><div>${extraLines.map((line) => `<div>${line}</div>`).join('')}</div>`
+    : '';
+  return `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937">${bodyHtml}${extraHtml}</div>`;
 }
 
 async function replaceScheduleAsset(itemId, fieldName, file, suffix) {
@@ -990,6 +1027,99 @@ router.post('/settings', async (req, res) => {
   } catch (e) {
     console.error('admin/settings/set:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.post('/send-emails', upload.array('attachments', 6), async (req, res) => {
+  try {
+    const subject = String(req.body?.subject || '').trim();
+    const body = String(req.body?.body || '').trim();
+    const includeLoginDetails = String(req.body?.include_login_details || '') === '1';
+    const department = String(req.body?.department || '').trim();
+
+    let recipientIds = [];
+    try {
+      recipientIds = JSON.parse(String(req.body?.recipient_ids || '[]'));
+    } catch {
+      recipientIds = [];
+    }
+
+    if (!subject || !body) {
+      return res.status(400).json({ error: 'יש להזין כותרת ותוכן הודעה' });
+    }
+
+    const smtpSettings = await readSettingsMap([
+      'smtp_server',
+      'smtp_port',
+      'smtp_security',
+      'smtp_user',
+      'smtp_password',
+      'site_url'
+    ]);
+
+    if (!smtpSettings.smtp_server || !smtpSettings.smtp_user || !smtpSettings.smtp_password) {
+      return res.status(400).json({ error: 'יש להגדיר תחילה פרטי SMTP בלשונית ההגדרות' });
+    }
+
+    const transporter = nodemailer.createTransport(buildTransportConfig(smtpSettings));
+
+    const filters = ['is_admin = 0'];
+    const params = [];
+    if (recipientIds.length) {
+      const cleanIds = recipientIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+      if (!cleanIds.length) {
+        return res.status(400).json({ error: 'לא נבחרו נמענים תקינים' });
+      }
+      filters.push(`id IN (${cleanIds.map(() => '?').join(',')})`);
+      params.push(...cleanIds);
+    }
+    if (department) {
+      filters.push('department = ?');
+      params.push(department);
+    }
+
+    const recipients = await db.query(`
+      SELECT id, email, name, phone_number, department
+      FROM users
+      WHERE ${filters.join(' AND ')}
+      ORDER BY department ASC, name ASC, id ASC
+    `, params);
+
+    if (!recipients.length) {
+      return res.status(400).json({ error: 'לא נמצאו נמענים לשליחה' });
+    }
+
+    const attachments = (req.files || []).map((file) => ({
+      filename: file.originalname || 'attachment',
+      content: file.buffer,
+      contentType: file.mimetype || undefined
+    }));
+
+    const sent = [];
+    for (const recipient of recipients) {
+      const extraLines = [];
+      const siteUrl = String(smtpSettings.site_url || '').trim();
+      if (includeLoginDetails) {
+        if (siteUrl) extraLines.push(`כתובת האתר: ${siteUrl}`);
+        extraLines.push(`שם משתמש: ${recipient.email}`);
+        extraLines.push(`סיסמה: ${recipient.phone_number || 'לא מוגדר מספר טלפון למשתמש זה'}`);
+      }
+
+      await transporter.sendMail({
+        from: String(smtpSettings.smtp_user).trim(),
+        to: recipient.email,
+        subject,
+        text: [body, ...extraLines].join('\n\n'),
+        html: buildEmailHtml(body, extraLines),
+        attachments
+      });
+      sent.push(recipient.email);
+    }
+
+    res.json({ ok: true, sent: sent.length, recipients: sent });
+  } catch (e) {
+    console.error('admin/send-emails:', e);
+    res.status(500).json({ error: `שליחת האימיילים נכשלה: ${e.message}` });
   }
 });
 

@@ -111,7 +111,13 @@ async function seed() {
     ['scoring_top_scorer','15'],
     ['lock_hours_before', process.env.LOCK_HOURS_BEFORE || '1'],
     ['scraper_mode',      process.env.SCRAPER_MODE || 'manual'],
-    ['departments',       JSON.stringify(DEFAULT_DEPARTMENTS)]
+    ['departments',       JSON.stringify(DEFAULT_DEPARTMENTS)],
+    ['site_url',          process.env.SITE_URL || 'http://localhost:5225'],
+    ['smtp_server',       process.env.SMTP_SERVER || 'smtp.inbox.co.il'],
+    ['smtp_port',         process.env.SMTP_PORT || '587'],
+    ['smtp_security',     process.env.SMTP_SECURITY || 'STARTTLS'],
+    ['smtp_user',         process.env.SMTP_USER || 'mon2026@reports.seach.co.il'],
+    ['smtp_password',     process.env.SMTP_PASSWORD || '^kdebr%cuNZ65Z']
   ];
   // INSERT IGNORE - אם המנהל כבר ערך הגדרה ידנית, נשמר ערכו הקיים.
   for (const [k, v] of settings) {
