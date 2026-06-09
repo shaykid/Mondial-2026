@@ -1124,6 +1124,15 @@ function SettingsTab() {
             />
           </div>
           <div className="field">
+            <label>מנהלת שליחות</label>
+            <input
+              type="email"
+              value={draft.smtp_manager_email ?? ''}
+              onChange={e => upd('smtp_manager_email', e.target.value)}
+              placeholder="aviva@seach.co.il"
+            />
+          </div>
+          <div className="field">
             <label>כתובת האתר</label>
             <input
               type="text"

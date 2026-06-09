@@ -1054,7 +1054,8 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       'smtp_security',
       'smtp_user',
       'smtp_password',
-      'site_url'
+      'site_url',
+      'smtp_manager_email'
     ]);
 
     if (!smtpSettings.smtp_server || !smtpSettings.smtp_user || !smtpSettings.smtp_password) {
@@ -1114,6 +1115,23 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
         attachments
       });
       sent.push(recipient.email);
+    }
+
+    const managerEmail = String(smtpSettings.smtp_manager_email || '').trim();
+    if (managerEmail) {
+      const summaryLines = [
+        `כותרת: ${subject}`,
+        `נשלח ל-${sent.length} משתמשים`,
+        `נמענים: ${sent.join(', ') || 'אין'}`,
+        includeLoginDetails ? 'נכללו פרטי התחברות: כן' : 'נכללו פרטי התחברות: לא'
+      ];
+      await transporter.sendMail({
+        from: String(smtpSettings.smtp_user).trim(),
+        to: managerEmail,
+        subject: `דוח שליחה: ${subject}`,
+        text: `${summaryLines.join('\n')}\n\nתוכן ההודעה:\n${body}`,
+        html: buildEmailHtml(body, summaryLines)
+      });
     }
 
     res.json({ ok: true, sent: sent.length, recipients: sent });
