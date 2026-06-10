@@ -1191,8 +1191,8 @@ function SettingsTab() {
               value={draft.email_user_delivery_mode ?? 'smtp'}
               onChange={e => upd('email_user_delivery_mode', e.target.value)}
             >
-              <option value="smtp">SMTP של הספק</option>
-              <option value="gmail">Gmail OAuth</option>
+              <option value="smtp">SMTP של הספק (seach.co.il)</option>
+              <option value="gmail">חשבון Gmail (סיסמת אפליקציה)</option>
             </select>
           </div>
           <div className="field">
@@ -1266,50 +1266,24 @@ function SettingsTab() {
             <label>כתובת Gmail שולחת</label>
             <input
               type="email"
-              value={draft.gmail_from_email ?? ''}
-              onChange={e => upd('gmail_from_email', e.target.value)}
+              value={draft.gmail_app_user ?? ''}
+              onChange={e => upd('gmail_app_user', e.target.value)}
               placeholder="example@gmail.com"
             />
           </div>
           <div className="field">
-            <label>Gmail Client ID</label>
+            <label>סיסמת אפליקציה של Gmail</label>
             <input
               type="text"
-              value={draft.gmail_client_id ?? ''}
-              onChange={e => upd('gmail_client_id', e.target.value)}
-              placeholder="Google OAuth Client ID"
-            />
-          </div>
-          <div className="field">
-            <label>Gmail Client Secret</label>
-            <input
-              type="text"
-              value={draft.gmail_client_secret ?? ''}
-              onChange={e => upd('gmail_client_secret', e.target.value)}
-              placeholder="Google OAuth Client Secret"
-            />
-          </div>
-          <div className="field">
-            <label>Gmail Refresh Token</label>
-            <input
-              type="text"
-              value={draft.gmail_refresh_token ?? ''}
-              onChange={e => upd('gmail_refresh_token', e.target.value)}
-              placeholder="Google OAuth Refresh Token"
-            />
-          </div>
-          <div className="field">
-            <label>Gmail Access Token</label>
-            <input
-              type="text"
-              value={draft.gmail_access_token ?? ''}
-              onChange={e => upd('gmail_access_token', e.target.value)}
-              placeholder="לא חובה"
+              value={draft.gmail_app_password ?? ''}
+              onChange={e => upd('gmail_app_password', e.target.value)}
+              placeholder="16 תווים (App Password)"
             />
           </div>
         </div>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
-          הודעות למשתתפים יכולות להישלח דרך Gmail OAuth, בעוד דוח המנהלת ימשיך לצאת דרך SMTP של הספק.
+          כשבוחרים "חשבון Gmail", הודעות למשתתפים יישלחו דרך smtp.gmail.com עם כתובת ה-Gmail וסיסמת האפליקציה
+          (יש להפעיל אימות דו-שלבי בחשבון Google וליצור "סיסמת אפליקציה"). דוח המנהלת ימשיך לצאת דרך SMTP של seach.co.il.
         </div>
       </SettingsCard>
 

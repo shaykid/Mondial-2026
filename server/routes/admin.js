@@ -274,17 +274,16 @@ function buildTransportConfig(settings) {
   };
 }
 
+// שליחה דרך חשבון Gmail באמצעות "סיסמת אפליקציה" (smtp.gmail.com) — ללא OAuth2.
 function buildGmailTransportConfig(settings) {
-  const user = String(settings.gmail_from_email || settings.gmail_user || '').trim();
   return {
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    requireTLS: true,
     auth: {
-      type: 'OAuth2',
-      user,
-      clientId: String(settings.gmail_client_id || '').trim(),
-      clientSecret: String(settings.gmail_client_secret || '').trim(),
-      refreshToken: String(settings.gmail_refresh_token || '').trim(),
-      accessToken: String(settings.gmail_access_token || '').trim() || undefined
+      user: String(settings.gmail_app_user || '').trim(),
+      pass: String(settings.gmail_app_password || '')
     }
   };
 }
@@ -300,14 +299,8 @@ function assertSmtpSettings(settings) {
 }
 
 function assertGmailSettings(settings) {
-  const required = [
-    'gmail_from_email',
-    'gmail_client_id',
-    'gmail_client_secret',
-    'gmail_refresh_token'
-  ];
-  if (required.some((key) => !String(settings[key] || '').trim())) {
-    throw new Error('יש להגדיר תחילה את כל פרטי Gmail OAuth בלשונית ההגדרות');
+  if (!String(settings.gmail_app_user || '').trim() || !String(settings.gmail_app_password || '').trim()) {
+    throw new Error('יש להגדיר כתובת Gmail וסיסמת אפליקציה בלשונית ההגדרות');
   }
 }
 
@@ -1378,11 +1371,8 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       'site_url',
       'smtp_manager_email',
       'email_user_delivery_mode',
-      'gmail_from_email',
-      'gmail_client_id',
-      'gmail_client_secret',
-      'gmail_refresh_token',
-      'gmail_access_token'
+      'gmail_app_user',
+      'gmail_app_password'
     ]);
     const userDeliveryMode = resolveUserDeliveryMode(smtpSettings);
     assertSmtpSettings(smtpSettings);
@@ -1393,7 +1383,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       ? nodemailer.createTransport(buildGmailTransportConfig(smtpSettings))
       : reportTransporter;
     const userSenderEmail = userDeliveryMode === 'gmail'
-      ? String(smtpSettings.gmail_from_email || '').trim()
+      ? String(smtpSettings.gmail_app_user || '').trim()
       : String(smtpSettings.smtp_user || '').trim();
     const reportSenderEmail = String(smtpSettings.smtp_user || '').trim();
 
