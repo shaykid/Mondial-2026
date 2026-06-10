@@ -1023,11 +1023,22 @@ function SettingsTab() {
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
           גבולות מערכת הניחוש הקבוצתי. שינוי המכפיל המקסימלי ישפיע על חישובים חדשים (הרץ "חישוב מחדש" לעדכון רטרואקטיבי).
         </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <input
+            type="checkbox"
+            checked={String(draft.site_guess_groups_enabled ?? 'false') === 'true'}
+            onChange={e => upd('site_guess_groups_enabled', e.target.checked ? 'true' : 'false')}
+          />
+          הפעל ניחוש קבוצתי ברמת האתר
+        </label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <NumField label="מקס׳ קבוצות לכל משתמש" value={draft.group_max_per_user ?? 8} onChange={v => upd('group_max_per_user', v)} />
           <NumField label="מקס׳ חברים בקבוצה" value={draft.group_max_members ?? 5} onChange={v => upd('group_max_members', v)} />
           <NumField label="דמי כניסה מקסימליים (נק׳)" value={draft.group_entry_cost_max ?? 5} onChange={v => upd('group_entry_cost_max', v)} />
           <NumField label="מכפיל מקסימלי (×)" value={draft.group_multiplier_cap ?? 5} onChange={v => upd('group_multiplier_cap', v)} />
+        </div>
+        <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
+          כשהאפשרות כבויה, קישור הניחוש הקבוצתי מוסתר מכל המשתמשים וגם ה-API נחסם.
         </div>
       </SettingsCard>
 

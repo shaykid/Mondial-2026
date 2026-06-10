@@ -15,6 +15,11 @@ const upload = multer({
 });
 let authColumnsReady = false;
 
+async function isSiteGuessGroupsEnabled() {
+  const row = await db.one('SELECT `value` FROM settings WHERE `key` = ?', ['site_guess_groups_enabled']);
+  return String(row?.value || 'false').trim().toLowerCase() === 'true';
+}
+
 function normalizePhone(value) {
   return String(value || '').replace(/\D+/g, '');
 }
@@ -58,7 +63,8 @@ async function ensureProfileImageColumn() {
 }
 
 // helper - אל תשלח החוצה password_hash
-function sanitize(user) {
+async function sanitize(user) {
+  const siteGuessGroupsEnabled = await isSiteGuessGroupsEnabled();
   return {
     id: user.id,
     email: user.email,
@@ -68,7 +74,7 @@ function sanitize(user) {
     profile_image_url: user.profile_image_url || '',
     department: user.department || '',
     isAdmin: !!user.is_admin,
-    canGuessGroups: !!user.is_admin || !!user.can_guess_groups,
+    canGuessGroups: siteGuessGroupsEnabled && (!!user.is_admin || !!user.can_guess_groups),
     createdAt: user.created_at
   };
 }
@@ -95,7 +101,7 @@ router.post('/register', async (req, res) => {
     );
     const user = await db.one('SELECT * FROM users WHERE id = ?', [r.insertId]);
     const token = signToken(user);
-    res.json({ token, user: sanitize(user) });
+    res.json({ token, user: await sanitize(user) });
   } catch (e) {
     console.error('register:', e);
     res.status(500).json({ error: 'שגיאת שרת בהרשמה' });
@@ -120,7 +126,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
     }
     const token = signToken(user);
-    res.json({ token, user: sanitize(user) });
+    res.json({ token, user: await sanitize(user) });
   } catch (e) {
     console.error('login:', e);
     res.status(500).json({ error: 'שגיאת שרת בכניסה' });
@@ -132,7 +138,7 @@ router.get('/me', auth(), async (req, res) => {
   try {
     const user = await db.one('SELECT * FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'משתמש לא נמצא' });
-    res.json({ user: sanitize(user), token: signToken(user) });
+    res.json({ user: await sanitize(user), token: signToken(user) });
   } catch (e) {
     console.error('me:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
@@ -205,7 +211,7 @@ router.post('/profile', auth(), upload.single('profile_image'), async (req, res)
       [phone || null, preferredLanguage, profileImageUrl, req.user.id]
     );
     const updatedUser = await db.one('SELECT * FROM users WHERE id = ?', [req.user.id]);
-    res.json({ ok: true, user: sanitize(updatedUser) });
+    res.json({ ok: true, user: await sanitize(updatedUser) });
   } catch (e) {
     console.error('profile-update:', e);
     const msg = e.code === 'EACCES'

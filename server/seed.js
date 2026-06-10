@@ -116,6 +116,7 @@ async function seed() {
     ['group_max_members',    '5'],
     ['group_entry_cost_max', '5'],
     ['group_multiplier_cap', '5'],
+    ['site_guess_groups_enabled', process.env.SITE_GUESS_GROUPS_ENABLED || 'false'],
     ['departments',       JSON.stringify(DEFAULT_DEPARTMENTS)],
     ['site_url',          process.env.SITE_URL || 'http://localhost:5225'],
     ['smtp_server',       process.env.SMTP_SERVER || 'smtp.inbox.co.il'],

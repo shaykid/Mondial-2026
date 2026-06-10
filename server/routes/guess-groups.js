@@ -20,6 +20,10 @@ const VALID_PICKS = ['home', 'draw', 'away'];
 // נבדק מול ה-DB בכל בקשה כדי לשקף שינוי הרשאה ע"י מנהל באופן מיידי.
 async function requireGuessAccess(req, res, next) {
   try {
+    const featureEnabled = await getSetting('site_guess_groups_enabled', 'false');
+    if (String(featureEnabled).trim().toLowerCase() !== 'true') {
+      return res.status(403).json({ error: 'הניחוש הקבוצתי כבוי כרגע ברמת האתר' });
+    }
     if (req.user.isAdmin) return next();
     const u = await db.one('SELECT can_guess_groups FROM users WHERE id = ?', [req.user.id]);
     if (!u || !u.can_guess_groups) {
