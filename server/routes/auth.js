@@ -1,6 +1,7 @@
 // נתיבי אימות (async/MySQL)
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -75,6 +76,7 @@ async function sanitize(user) {
     department: user.department || '',
     isAdmin: !!user.is_admin,
     role: user.is_admin ? 'admin' : (user.role || 'user'),
+    isGuest: !!user.is_guest,
     canGuessGroups: siteGuessGroupsEnabled && (!!user.is_admin || !!user.can_guess_groups),
     createdAt: user.created_at
   };
@@ -219,6 +221,100 @@ router.post('/profile', auth(), upload.single('profile_image'), async (req, res)
       ? `אין הרשאת כתיבה לתיקיית התמונות בשרת (${e.path || 'data/profile_images'})`
       : e.message;
     res.status(500).json({ error: `שגיאת שרת: ${msg}` });
+  }
+});
+
+// ────────── זרימת "אורח" (התחל לשחק לפני הרשמה) ──────────
+
+// יצירת משתמש אורח זמני והחזרת token כדי שיוכל לשמור ניחושים מיד
+router.post('/guest-start', async (req, res) => {
+  try {
+    await ensureAuthColumns();
+    // ניקוי אורחים נטושים (לא הושלמה הרשמה תוך יומיים) כדי שלא יצטברו
+    await db.run("DELETE FROM users WHERE is_guest = 1 AND created_at < (NOW() - INTERVAL 2 DAY)").catch(() => {});
+    const lang = normalizeLanguage(req.body?.preferred_language);
+    const placeholder = `guest_${Date.now()}_${crypto.randomBytes(5).toString('hex')}@guest.local`;
+    const hash = bcrypt.hashSync(crypto.randomBytes(12).toString('hex'), 10);
+    const r = await db.run(
+      `INSERT INTO users (email, name, preferred_language, password_hash, password_changed, is_admin, role, is_guest)
+       VALUES (?, ?, ?, ?, 0, 0, 'user', 1)`,
+      [placeholder, 'אורח', lang, hash]
+    );
+    const user = await db.one('SELECT * FROM users WHERE id = ?', [r.insertId]);
+    res.json({ token: signToken(user), user: await sanitize(user) });
+  } catch (e) {
+    console.error('guest-start:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// בדיקה אם אימייל כבר רשום (משתמש אמיתי שאינו אורח)
+router.post('/guest-check-email', auth(), async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.json({ exists: false });
+    const u = await db.one('SELECT id, is_guest FROM users WHERE email = ?', [email]);
+    res.json({ exists: !!(u && !u.is_guest && u.id !== req.user.id) });
+  } catch (e) {
+    console.error('guest-check-email:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// השלמת הרשמה של אורח: אימייל + טלפון.
+// אם האימייל כבר שייך למשתמש קיים — מאמתים מול הטלפון וממזגים את הניחושים.
+router.post('/guest-finalize', auth(), async (req, res) => {
+  try {
+    await ensureAuthColumns();
+    const guestId = req.user.id;
+    const guest = await db.one('SELECT * FROM users WHERE id = ?', [guestId]);
+    if (!guest) return res.status(404).json({ error: 'משתמש לא נמצא' });
+
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const phone = String(req.body?.phone_number || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: 'יש להזין כתובת אימייל תקינה' });
+    }
+    if (normalizePhone(phone).length < 6) {
+      return res.status(400).json({ error: 'יש להזין מספר טלפון תקין' });
+    }
+
+    const existing = await db.one('SELECT * FROM users WHERE email = ? AND id <> ?', [email, guestId]);
+
+    if (existing && !existing.is_guest) {
+      // אימייל קיים: מאמתים מול הטלפון של החשבון הקיים לפני מיזוג
+      if (!normalizePhone(existing.phone_number) || normalizePhone(existing.phone_number) !== normalizePhone(phone)) {
+        return res.status(409).json({
+          error: 'האימייל כבר רשום במערכת. אנא התחבר עם האימייל ומספר הטלפון שלך.',
+          needLogin: true
+        });
+      }
+      // מיזוג ניחושי האורח לחשבון הקיים (קיימים אצל המשתמש נשמרים)
+      await db.tx(async (t) => {
+        await t.run('UPDATE IGNORE predictions SET user_id = ? WHERE user_id = ?', [existing.id, guestId]);
+        const exSpecial = await t.one('SELECT user_id FROM special_predictions WHERE user_id = ?', [existing.id]);
+        if (!exSpecial) {
+          await t.run('UPDATE special_predictions SET user_id = ? WHERE user_id = ?', [existing.id, guestId]);
+        }
+        await t.run('DELETE FROM users WHERE id = ?', [guestId]); // שאריות (התנגשויות) נמחקות ב-CASCADE
+      });
+      return res.json({ merged: true, token: signToken(existing), user: await sanitize(existing) });
+    }
+
+    // אין התנגשות: הופכים את האורח למשתמש רשום (ללא סיסמה — התחברות עתידית עם הטלפון)
+    const displayName = (guest.name && guest.name !== 'אורח') ? guest.name : email.split('@')[0];
+    await db.run(
+      'UPDATE users SET email = ?, name = ?, phone_number = ?, is_guest = 0 WHERE id = ?',
+      [email, displayName, phone, guestId]
+    );
+    const updated = await db.one('SELECT * FROM users WHERE id = ?', [guestId]);
+    res.json({ token: signToken(updated), user: await sanitize(updated) });
+  } catch (e) {
+    console.error('guest-finalize:', e);
+    if (e.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'האימייל כבר רשום במערכת. אנא התחבר.', needLogin: true });
+    }
+    res.status(500).json({ error: 'שגיאת שרת' });
   }
 });
 

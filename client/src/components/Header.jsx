@@ -30,6 +30,11 @@ export default function Header() {
           )}
         </div>
 
+        {user.isGuest ? (
+          <nav className="nav">
+            <span className="nav-link active">{t('nav.predictions')}</span>
+          </nav>
+        ) : (
         <nav className="nav">
           <NavLink to="/" end className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.home')}</NavLink>
           <NavLink to="/predictions" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.predictions')}</NavLink>
@@ -45,6 +50,7 @@ export default function Header() {
             <NavLink to="/admin" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.admin')}</NavLink>
           )}
         </nav>
+        )}
 
         <span className="user-chip">
           <span>{user.name}</span>

@@ -115,6 +115,10 @@ async function main() {
   // התאמה לאחור: מנהלי מערכת קיימים (is_admin=1) מקבלים role='admin'
   await db.query("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND role <> 'admin'");
 
+  // משתמש אורח (התחלת משחק לפני הרשמה מלאה)
+  await addColumnIfMissing('users', 'is_guest',
+    "ALTER TABLE users ADD COLUMN is_guest TINYINT(1) NOT NULL DEFAULT 0 AFTER role");
+
   // עמודות "ניחוש קבוצתי" (אם הטבלאות נוצרו בגרסה מוקדמת ללא עמודות אלה)
   await addColumnIfMissing('guess_groups', 'entry_cost',
     'ALTER TABLE guess_groups ADD COLUMN entry_cost INT NOT NULL DEFAULT 0 AFTER leader_user_id');

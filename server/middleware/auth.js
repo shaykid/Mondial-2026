@@ -46,7 +46,7 @@ function signToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, name: user.name, isAdmin: !!user.is_admin, role: effectiveRole(user) },
     SECRET,
-    { expiresIn: '20d' }
+    { expiresIn: '40d' }
   );
 }
 

@@ -7,7 +7,11 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('mondial_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    // עדכון "פעולה אחרונה" — תוקף ההפעלה מתחדש ל-36 יום מהפעולה האחרונה
+    localStorage.setItem('mondial_last_active', String(Date.now()));
+  }
   return config;
 });
 

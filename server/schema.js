@@ -17,6 +17,7 @@ module.exports = [
     is_admin      TINYINT(1)      NOT NULL DEFAULT 0,
     can_guess_groups TINYINT(1)   NOT NULL DEFAULT 0,
     role          ENUM('user','manager','admin') NOT NULL DEFAULT 'user',
+    is_guest      TINYINT(1)      NOT NULL DEFAULT 0,
     created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 

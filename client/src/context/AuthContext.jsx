@@ -3,17 +3,35 @@ import api from '../api/client';
 
 const AuthContext = createContext(null);
 
+// העוגייה/הפעלה פגה לאחר 36 יום מהפעולה האחרונה של המשתמש
+const INACTIVITY_MS = 36 * 24 * 60 * 60 * 1000;
+const touch = () => localStorage.setItem('mondial_last_active', String(Date.now()));
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // טעינת המשתמש המחובר אם יש token
+  const persistSession = (token, u) => {
+    localStorage.setItem('mondial_token', token);
+    touch();
+    setUser(u);
+  };
+
+  // טעינת המשתמש המחובר אם יש token (פג תוקף לאחר 36 יום חוסר פעילות)
   useEffect(() => {
     const token = localStorage.getItem('mondial_token');
+    const lastActive = Number(localStorage.getItem('mondial_last_active') || 0);
     if (!token) { setLoading(false); return; }
+    if (lastActive && Date.now() - lastActive > INACTIVITY_MS) {
+      localStorage.removeItem('mondial_token');
+      localStorage.removeItem('mondial_last_active');
+      setLoading(false);
+      return;
+    }
     api.get('/auth/me')
       .then(r => {
         if (r.data.token) localStorage.setItem('mondial_token', r.data.token);
+        touch();
         setUser(r.data.user);
       })
       .catch(() => localStorage.removeItem('mondial_token'))
@@ -22,20 +40,38 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('mondial_token', data.token);
-    setUser(data.user);
+    persistSession(data.token, data.user);
     return data.user;
   };
 
   const register = async (name, email, password, preferred_language) => {
     const { data } = await api.post('/auth/register', { name, email, password, preferred_language });
-    localStorage.setItem('mondial_token', data.token);
-    setUser(data.user);
+    persistSession(data.token, data.user);
+    return data.user;
+  };
+
+  // התחלת משחק כאורח — יוצר משתמש זמני ומחזיר token כדי שיוכל לשמור ניחושים
+  const guestStart = async (preferred_language) => {
+    const { data } = await api.post('/auth/guest-start', { preferred_language });
+    persistSession(data.token, data.user);
+    return data.user;
+  };
+
+  const guestCheckEmail = async (email) => {
+    const { data } = await api.post('/auth/guest-check-email', { email });
+    return !!data.exists;
+  };
+
+  // השלמת הרשמת אורח (אימייל + טלפון) → רישום מלא לאתר
+  const guestFinalize = async (email, phone_number) => {
+    const { data } = await api.post('/auth/guest-finalize', { email, phone_number });
+    persistSession(data.token, data.user);
     return data.user;
   };
 
   const logout = () => {
     localStorage.removeItem('mondial_token');
+    localStorage.removeItem('mondial_last_active');
     setUser(null);
   };
 
@@ -50,7 +86,10 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{
+      user, loading, login, register, logout, updateProfile,
+      guestStart, guestCheckEmail, guestFinalize
+    }}>
       {children}
     </AuthContext.Provider>
   );

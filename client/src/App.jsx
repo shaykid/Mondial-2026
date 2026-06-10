@@ -27,7 +27,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-        <Route path="/predictions" element={<ProtectedRoute><Predictions /></ProtectedRoute>} />
+        <Route path="/predictions" element={<ProtectedRoute allowGuest><Predictions /></ProtectedRoute>} />
         <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
         <Route path="/schedule" element={<ProtectedRoute><SchedulePrizes /></ProtectedRoute>} />
         <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />

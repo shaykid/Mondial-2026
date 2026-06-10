@@ -262,7 +262,7 @@ async function leaderboard() {
       SUM(CASE WHEN p.points = ? THEN 1 ELSE 0 END) AS gd_hits
     FROM users u
     LEFT JOIN predictions p ON p.user_id = u.id
-    WHERE u.is_admin = 0
+    WHERE u.is_admin = 0 AND u.is_guest = 0
     GROUP BY u.id, u.name, u.profile_image_url
   `, [exactWeight, gdHitPoints]);
 

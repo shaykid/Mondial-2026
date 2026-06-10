@@ -451,7 +451,7 @@ router.use(auth(), adminGate);
 // סיכום מצב המערכת
 router.get('/overview', async (req, res) => {
   try {
-    const users      = await db.one('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0');
+    const users      = await db.one('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0 AND is_guest = 0');
     const preds      = await db.one('SELECT COUNT(*) AS n FROM predictions');
     const matchesC   = await db.one('SELECT COUNT(*) AS n FROM matches');
     const finished   = await db.one("SELECT COUNT(*) AS n FROM matches WHERE status = 'finished'");
@@ -474,6 +474,7 @@ router.get('/users', async (req, res) => {
       SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
+      WHERE u.is_guest = 0
       ORDER BY u.id DESC
     `);
     res.json(rows);
@@ -1413,7 +1414,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       : String(smtpSettings.smtp_user || '').trim();
     const reportSenderEmail = String(smtpSettings.smtp_user || '').trim();
 
-    const filters = ['is_admin = 0'];
+    const filters = ['is_admin = 0', 'is_guest = 0'];
     const params = [];
     if (recipientIds.length) {
       const cleanIds = recipientIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);

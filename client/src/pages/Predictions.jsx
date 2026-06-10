@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api, { errMsg } from '../api/client';
 import Flag from '../components/Flag';
 import { useTranslation } from '../i18n/TranslationContext';
+import { useAuth } from '../context/AuthContext';
 
 function formatDateTime(iso, locale) {
   const d = new Date(iso);
@@ -33,6 +35,18 @@ function scoreTone(side, home, away) {
 
 export default function Predictions() {
   const { t, locale, pickText, language } = useTranslation();
+  const { user, guestCheckEmail, guestFinalize } = useAuth();
+  const nav = useNavigate();
+  const isGuest = !!user?.isGuest;
+  // הרשמת אורח בסיום: אימייל → טלפון → קדימה
+  const [regOpen, setRegOpen] = useState(false);
+  const [regStep, setRegStep] = useState('email');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regEmailExists, setRegEmailExists] = useState(false);
+  const [regBusy, setRegBusy] = useState(false);
+  const [regErr, setRegErr] = useState('');
+  const [autoPrompted, setAutoPrompted] = useState(false);
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [predictions, setPredictions] = useState({});  // matchId -> {home, away, points, locked, saved}
@@ -131,6 +145,42 @@ export default function Predictions() {
       return next;
     });
   };
+
+  // ─── הרשמת אורח בסיום ───
+  const filledCount = Object.values(predictions).filter(p => Number.isInteger(p.home) && Number.isInteger(p.away)).length;
+  const openReg = () => { setRegErr(''); setRegStep('email'); setRegOpen(true); };
+
+  const regContinueEmail = async () => {
+    const email = regEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setRegErr('יש להזין כתובת אימייל תקינה'); return; }
+    setRegBusy(true); setRegErr('');
+    try {
+      const exists = await guestCheckEmail(email);
+      setRegEmailExists(exists);
+      setRegStep('phone');
+    } catch (e) { setRegErr(errMsg(e)); }
+    finally { setRegBusy(false); }
+  };
+
+  const regSubmit = async () => {
+    if (regPhone.replace(/\D/g, '').length < 6) { setRegErr('יש להזין מספר טלפון תקין'); return; }
+    setRegBusy(true); setRegErr('');
+    try {
+      await guestFinalize(regEmail.trim().toLowerCase(), regPhone.trim());
+      setRegOpen(false);
+      nav('/');
+    } catch (e) {
+      setRegErr(errMsg(e));
+    } finally { setRegBusy(false); }
+  };
+
+  // אורח: פתיחה אוטומטית של ההרשמה לאחר 3 ניחושים
+  useEffect(() => {
+    if (isGuest && !autoPrompted && !regOpen && filledCount >= 3) {
+      setAutoPrompted(true);
+      openReg();
+    }
+  }, [isGuest, autoPrompted, regOpen, filledCount]);
 
   const save = async (matchId) => {
     const p = predictions[matchId];
@@ -255,6 +305,13 @@ export default function Predictions() {
       </p>
 
       {msg && <div className={`alert ${msg.startsWith('✓') ? 'alert-success' : 'alert-error'}`} style={{position:'sticky', top: 80, zIndex: 10}}>{msg}</div>}
+
+      {isGuest && (
+        <div className="alert" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap', background:'var(--paper-pure)', border:'1px solid var(--gold)' }}>
+          <span>אתה משחק כאורח — מלא ניחושים ולחץ "סיום והרשמה" כדי לשמור אותם ולהצטרף.</span>
+          <button type="button" className="btn btn-gold" onClick={openReg}>סיום והרשמה</button>
+        </div>
+      )}
 
       <div className="predictions-toolbar">
         <div className="tabs">
@@ -382,6 +439,47 @@ export default function Predictions() {
             </div>
           ))}
         </>
+      )}
+
+      {regOpen && (
+        <div className="doc-modal-backdrop" onClick={() => !regBusy && setRegOpen(false)}>
+          <div className="doc-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="doc-modal-head">
+              <h3>{regStep === 'email' ? 'כמעט סיימת! מה האימייל שלך?' : 'מה מספר הטלפון שלך?'}</h3>
+              {!regBusy && <button type="button" className="btn btn-sm btn-outline" onClick={() => setRegOpen(false)}>{t('common.close')}</button>}
+            </div>
+            {regErr && <div className="alert alert-error">{regErr}</div>}
+            {regStep === 'email' ? (
+              <>
+                <div className="field">
+                  <label>אימייל</label>
+                  <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} autoComplete="email" placeholder="example@email.com" />
+                </div>
+                <button className="btn btn-gold" style={{ width:'100%', justifyContent:'center' }} onClick={regContinueEmail} disabled={regBusy}>
+                  {regBusy ? <span className="spinner" /> : 'המשך'}
+                </button>
+              </>
+            ) : (
+              <>
+                {regEmailExists && (
+                  <div className="alert" style={{ background:'var(--paper-pure)', border:'1px solid var(--gold)' }}>
+                    האימייל כבר רשום — הזן את הטלפון שלך לאימות, ונמשיך לחשבון הקיים.
+                  </div>
+                )}
+                <div className="field">
+                  <label>טלפון</label>
+                  <input type="tel" value={regPhone} onChange={e => setRegPhone(e.target.value)} autoComplete="tel" placeholder="050-0000000" />
+                </div>
+                <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                  <button className="btn btn-outline" onClick={() => setRegStep('email')} disabled={regBusy}>חזרה</button>
+                  <button className="btn btn-gold" style={{ flex:1, justifyContent:'center' }} onClick={regSubmit} disabled={regBusy}>
+                    {regBusy ? <span className="spinner" /> : 'קדימה'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </main>
   );

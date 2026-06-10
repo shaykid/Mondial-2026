@@ -7,11 +7,13 @@ import { useTheme } from '../context/ThemeContext';
 import LanguageSelector from '../components/LanguageSelector';
 
 export default function Login() {
-  const { user, login, register } = useAuth();
+  const { user, login, register, guestStart } = useAuth();
   const { t, language } = useTranslation();
   const { assets } = useTheme();
   const nav = useNavigate();
   const [mode, setMode] = useState('login');
+  const [showAuthForm, setShowAuthForm] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +23,18 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   if (user) return <Navigate to="/" replace />;
+
+  const playAsGuest = async () => {
+    setErr(''); setGuestBusy(true);
+    try {
+      await guestStart(language);
+      nav('/predictions');
+    } catch (er) {
+      setErr(errMsg(er, t('login.error_default')));
+    } finally {
+      setGuestBusy(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -73,6 +87,31 @@ export default function Login() {
 
       <div className="login-form-area">
         <div className="login-form">
+          <button
+            type="button"
+            className="btn btn-gold guest-cta"
+            onClick={playAsGuest}
+            disabled={guestBusy}
+            style={{ width: '100%', justifyContent: 'center', padding: '20px', fontSize: 22, fontWeight: 800 }}
+          >
+            {guestBusy ? <span className="spinner" /> : 'בוא נשחק'}
+          </button>
+          <p className="sub" style={{ textAlign: 'center', marginTop: 10 }}>
+            התחל לנחש מיד — הפרטים יתבקשו בסיום.
+          </p>
+
+          {!showAuthForm ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setShowAuthForm(true)}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+            >
+              כבר רשום? התחברות / הרשמה
+            </button>
+          ) : (
+          <>
+          <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--line)' }} />
           <h2>{mode === 'login' ? t('login.mode_login') : t('login.mode_register')}</h2>
           <p className="sub">{mode === 'login' ? t('login.sub_login') : t('login.sub_register')}</p>
 
@@ -114,6 +153,8 @@ export default function Login() {
               {busy ? <span className="spinner" /> : (mode === 'login' ? t('login.submit_login') : t('login.submit_register'))}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>
