@@ -27,12 +27,27 @@ function adminOnly(req, res, next) {
   next();
 }
 
+// גישה למנהל מערכת מלא (admin) או למנהל-משנה (manager)
+function managerOrAdmin(req, res, next) {
+  if (!req.user || !(req.user.isAdmin || req.user.role === 'manager')) {
+    return res.status(403).json({ error: 'גישה זו מוגבלת לצוות הניהול' });
+  }
+  next();
+}
+
+// תפקיד אפקטיבי מתוך שורת המשתמש. is_admin הוא הדגל הסמכותי לתאימות לאחור:
+// כל שורה עם is_admin=1 נחשבת admin גם אם עמודת role נשארה בברירת המחדל 'user'.
+function effectiveRole(user) {
+  if (user.is_admin) return 'admin';
+  return user.role || 'user';
+}
+
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, name: user.name, isAdmin: !!user.is_admin },
+    { id: user.id, email: user.email, name: user.name, isAdmin: !!user.is_admin, role: effectiveRole(user) },
     SECRET,
     { expiresIn: '20d' }
   );
 }
 
-module.exports = { auth, adminOnly, signToken };
+module.exports = { auth, adminOnly, managerOrAdmin, effectiveRole, signToken };

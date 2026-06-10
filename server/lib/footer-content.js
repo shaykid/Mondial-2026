@@ -7,6 +7,7 @@ const FOOTER_DOCS_DDL = `
     doc_key       VARCHAR(40)     NOT NULL UNIQUE,
     label         VARCHAR(120)    NOT NULL,
     file_url      VARCHAR(500)    NULL,
+    file_name     VARCHAR(255)    NULL,
     file_type     VARCHAR(20)     NOT NULL DEFAULT 'pdf',
     sort_order    INT             NOT NULL DEFAULT 0,
     created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -42,6 +43,17 @@ async function ensureFooterContentTables(tx = db) {
   `);
   if (!handledCol?.n) {
     await tx.query('ALTER TABLE contact_messages ADD COLUMN handled_at DATETIME NULL AFTER image_url');
+  }
+  // שם הקובץ המקורי שהועלה (להצגה בלוח הניהול)
+  const fileNameCol = await tx.one(`
+    SELECT COUNT(*) AS n
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'footer_documents'
+      AND column_name = 'file_name'
+  `);
+  if (!fileNameCol?.n) {
+    await tx.query('ALTER TABLE footer_documents ADD COLUMN file_name VARCHAR(255) NULL AFTER file_url');
   }
 }
 

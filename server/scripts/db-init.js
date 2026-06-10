@@ -105,6 +105,12 @@ async function main() {
   await addColumnIfMissing('users', 'can_guess_groups',
     'ALTER TABLE users ADD COLUMN can_guess_groups TINYINT(1) NOT NULL DEFAULT 0 AFTER is_admin');
 
+  // תפקיד משתמש: user / manager / admin (מנהל מערכת מלא מקבל admin)
+  await addColumnIfMissing('users', 'role',
+    "ALTER TABLE users ADD COLUMN role ENUM('user','manager','admin') NOT NULL DEFAULT 'user' AFTER can_guess_groups");
+  // התאמה לאחור: מנהלי מערכת קיימים (is_admin=1) מקבלים role='admin'
+  await db.query("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND role <> 'admin'");
+
   // עמודות "ניחוש קבוצתי" (אם הטבלאות נוצרו בגרסה מוקדמת ללא עמודות אלה)
   await addColumnIfMissing('guess_groups', 'entry_cost',
     'ALTER TABLE guess_groups ADD COLUMN entry_cost INT NOT NULL DEFAULT 0 AFTER leader_user_id');

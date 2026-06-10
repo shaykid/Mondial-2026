@@ -92,7 +92,7 @@ async function seed() {
   if (!exists) {
     const hash = bcrypt.hashSync(adminPass, 10);
     await db.run(
-      `INSERT INTO users (email, name, password_hash, preferred_language, is_admin) VALUES (?, ?, ?, 'he', 1)`,
+      `INSERT INTO users (email, name, password_hash, preferred_language, is_admin, role) VALUES (?, ?, ?, 'he', 1, 'admin')`,
       [adminEmail, 'מנהל המערכת', hash]
     );
     console.log(`   ✓ נוצר משתמש מנהל: ${adminEmail} / ${adminPass}`);

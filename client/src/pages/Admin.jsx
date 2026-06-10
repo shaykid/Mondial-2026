@@ -6,11 +6,16 @@ import { useEffect, useState } from 'react';
 import api, { errMsg } from '../api/client';
 import Flag from '../components/Flag';
 import { useTranslation } from '../i18n/TranslationContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Admin() {
   const [tab, setTab] = useState('overview');
   const { t } = useTranslation();
-  const tabs = [
+  const { user } = useAuth();
+  const isFullAdmin = !!user?.isAdmin;
+  // מנהל-משנה (manager) רואה רק את הטאבים של ניהול משתמשים ומשחקים
+  const MANAGER_TABS = ['overview', 'users', 'matches'];
+  const allTabs = [
     { id: 'overview', label: t('admin.tab_overview') },
     { id: 'users', label: t('admin.tab_users') },
     { id: 'departments', label: t('admin.tab_departments') },
@@ -21,6 +26,7 @@ export default function Admin() {
     { id: 'schedule', label: t('admin.tab_schedule') },
     { id: 'actions', label: t('admin.tab_actions') }
   ];
+  const tabs = isFullAdmin ? allTabs : allTabs.filter(item => MANAGER_TABS.includes(item.id));
 
   return (
     <div className="page">
@@ -91,6 +97,8 @@ function OverviewTab() {
 
 /* ─────────────── משתמשים ─────────────── */
 function UsersTab() {
+  const { user: currentUser } = useAuth();
+  const isFullAdmin = !!currentUser?.isAdmin;
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [err, setErr] = useState('');
@@ -105,7 +113,7 @@ function UsersTab() {
   const [editingUser, setEditingUser] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [creatingUser, setCreatingUser] = useState(false);
-  const [createDraft, setCreateDraft] = useState({ name: '', email: '', phone_number: '', department: '', password: '' });
+  const [createDraft, setCreateDraft] = useState({ name: '', email: '', phone_number: '', department: '', password: '', role: 'user' });
   const [createBusy, setCreateBusy] = useState(false);
   const [createNotice, setCreateNotice] = useState('');
   const [editBusy, setEditBusy] = useState(false);
@@ -138,7 +146,8 @@ function UsersTab() {
       email: user.email || '',
       phone_number: user.phone_number || '',
       department: user.department || '',
-      can_guess_groups: !!user.can_guess_groups
+      can_guess_groups: !!user.can_guess_groups,
+      role: user.is_admin ? 'admin' : (user.role || 'user')
     });
   };
 
@@ -154,7 +163,7 @@ function UsersTab() {
   const openCreate = () => {
     setErr('');
     setCreateNotice('');
-    setCreateDraft({ name: '', email: '', phone_number: '', department: '', password: '' });
+    setCreateDraft({ name: '', email: '', phone_number: '', department: '', password: '', role: 'user' });
     setCreatingUser(true);
   };
 
@@ -206,6 +215,7 @@ function UsersTab() {
         department: editDraft.department,
         can_guess_groups: editDraft.can_guess_groups
       };
+      if (isFullAdmin) payload.role = editDraft.role;
       const { data } = await api.patch(`/admin/users/${editingUser.id}`, payload);
       setEditNotice('הנתונים נשמרו בהצלחה');
       if (data?.user) {
@@ -215,7 +225,8 @@ function UsersTab() {
           email: data.user.email || '',
           phone_number: data.user.phone_number || '',
           department: data.user.department || '',
-          can_guess_groups: !!data.user.can_guess_groups
+          can_guess_groups: !!data.user.can_guess_groups,
+          role: data.user.is_admin ? 'admin' : (data.user.role || 'user')
         });
       }
       load();
@@ -448,9 +459,11 @@ function UsersTab() {
                   {new Date(u.created_at).toLocaleDateString('he-IL')}
                 </td>
                 <td>
-                  {u.is_admin
-                    ? <span className="deadline-badge ok">מנהל</span>
-                    : <span style={{ color: 'var(--muted)' }}>משתמש</span>
+                  {(u.role === 'admin' || u.is_admin)
+                    ? <span className="deadline-badge ok">מנהל מערכת</span>
+                    : u.role === 'manager'
+                      ? <span className="deadline-badge">מנהל-משנה</span>
+                      : <span style={{ color: 'var(--muted)' }}>משתמש</span>
                   }
                 </td>
                 <td>
@@ -459,7 +472,7 @@ function UsersTab() {
                     style={{ marginInlineEnd: 8 }}
                     onClick={() => openEdit(u)}
                   >ערוך</button>
-                  {!u.is_admin && (
+                  {!(u.role === 'admin' || u.is_admin) && (
                     <button
                       className="btn btn-sm"
                       style={{ background: 'var(--crimson)' }}
@@ -513,6 +526,16 @@ function UsersTab() {
                 <label>סיסמה</label>
                 <input value={createDraft.password} onChange={e => setCreateDraft(s => ({ ...s, password: e.target.value }))} placeholder="ריק = יצירה אוטומטית" />
               </div>
+              {isFullAdmin && (
+                <div className="field">
+                  <label>תפקיד</label>
+                  <select value={createDraft.role} onChange={e => setCreateDraft(s => ({ ...s, role: e.target.value }))}>
+                    <option value="user">משתמש</option>
+                    <option value="manager">מנהל-משנה</option>
+                    <option value="admin">מנהל מערכת</option>
+                  </select>
+                </div>
+              )}
             </div>
             <button className="btn btn-pitch" onClick={createUser} disabled={createBusy}>
               {createBusy ? 'יוצר...' : 'צור משתמש'}
@@ -602,6 +625,23 @@ function UsersTab() {
                 <option key={dep} value={dep} />
               ))}
             </datalist>
+
+            {isFullAdmin && (
+              <div className="field" style={{ marginTop: 16 }}>
+                <label>תפקיד</label>
+                <select
+                  value={editDraft.role}
+                  onChange={e => setEditDraft(s => ({ ...s, role: e.target.value }))}
+                >
+                  <option value="user">משתמש</option>
+                  <option value="manager">מנהל-משנה (ניהול משתמשים ומשחקים)</option>
+                  <option value="admin">מנהל מערכת (גישה מלאה)</option>
+                </select>
+                <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
+                  מנהל-משנה רשאי לנהל משתמשים ולעדכן תוצאות משחקים בלבד.
+                </div>
+              </div>
+            )}
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer' }}>
               <input
@@ -940,6 +980,7 @@ function SettingsTab() {
           label: doc.label || '',
           file: null,
           file_url: doc.file_url || '',
+          file_name: doc.file_name || '',
           file_type: doc.file_type || 'pdf'
         }])));
         setContactMessages(footerRes.data.contacts || []);
@@ -979,6 +1020,7 @@ function SettingsTab() {
           label: nextDoc.label || '',
           file: null,
           file_url: nextDoc.file_url || '',
+          file_name: nextDoc.file_name || '',
           file_type: nextDoc.file_type || 'pdf'
         }
       }));
@@ -1289,6 +1331,14 @@ function SettingsTab() {
                   </div>
                   <div className="field">
                     <label>החלפת קובץ</label>
+                    {docDraft.file_url && (
+                      <div style={{ fontSize: 13, marginBottom: 6 }}>
+                        קובץ נוכחי:{' '}
+                        <a href={docDraft.file_url} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>
+                          {docDraft.file_name || (docDraft.file_type === 'image' ? 'תמונה' : 'PDF')}
+                        </a>
+                      </div>
+                    )}
                     <input
                       type="file"
                       accept=".pdf,image/*"
@@ -1296,11 +1346,6 @@ function SettingsTab() {
                     />
                   </div>
                 </div>
-                {docDraft.file_url && (
-                  <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>
-                    קובץ נוכחי: {docDraft.file_type === 'image' ? 'תמונה' : 'PDF'}
-                  </div>
-                )}
                 <button className="btn btn-sm btn-gold" onClick={() => saveFooterDoc(doc.doc_key)} disabled={savingDocKey === doc.doc_key}>
                   {savingDocKey === doc.doc_key ? 'שומר...' : 'שמור מסמך'}
                 </button>

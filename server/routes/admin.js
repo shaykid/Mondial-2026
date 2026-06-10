@@ -10,7 +10,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const XLSX = require('xlsx');
 const db = require('../db');
-const { auth, adminOnly } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { updateMatchScore, runDailyUpdate } = require('../services/scraper');
 const { recalcForMatch, loadBadgeConfig, DEFAULT_BADGE_CONFIG } = require('../services/scoring');
 const { seedScheduleItems } = require('../lib/schedule-items');
@@ -373,21 +373,58 @@ async function fetchScheduleItems(tx = db) {
   `);
 }
 
-async function replaceFooterDocAsset(docKey, file) {
+async function replaceFooterDocAsset(docKey, file, prevUrl) {
   const ext = path.extname(file.originalname || '').toLowerCase() || '.pdf';
   const safeExt = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.pdf';
   const rootDir = path.join(__dirname, '..', '..', 'data', 'footer_docs');
   await fs.promises.mkdir(rootDir, { recursive: true });
-  const fileName = `${docKey}${safeExt}`;
-  const fullPath = path.join(rootDir, fileName);
+  // שם קובץ ייחודי (חותמת זמן) כדי שכתובת ה-URL תשתנה בכל העלאה ותעקוף את קאש הדפדפן,
+  // כך שהקישור בפוטר יפתח תמיד את ה-PDF החדש ולא גרסה ישנה שמורה.
+  const storedName = `${docKey}-${Date.now()}${safeExt}`;
+  const fullPath = path.join(rootDir, storedName);
   await fs.promises.writeFile(fullPath, file.buffer);
+  // ניקוי הקובץ הקודם (אם קיים תחת התיקייה שלנו ואינו אחד מקובצי ברירת המחדל)
+  if (prevUrl) {
+    const prevName = path.basename(String(prevUrl).split('?')[0]);
+    if (prevName && prevName !== storedName && prevName.startsWith(`${docKey}-`)) {
+      await fs.promises.rm(path.join(rootDir, prevName), { force: true }).catch(() => {});
+    }
+  }
   return {
-    url: `/data/footer_docs/${fileName}`,
-    type: safeExt === '.pdf' ? 'pdf' : 'image'
+    url: `/data/footer_docs/${storedName}`,
+    type: safeExt === '.pdf' ? 'pdf' : 'image',
+    name: file.originalname || storedName
   };
 }
 
-router.use(auth(), adminOnly);
+// מנהל מערכת מלא (admin) ניגש להכל. מנהל-משנה (manager) מוגבל לניהול משתמשים ומשחקים בלבד.
+const MANAGER_GET = [/^\/overview$/, /^\/departments$/];
+const MANAGER_ANY = [/^\/users(\/.*)?$/, /^\/matches(\/.*)?$/, /^\/scrape-now$/, /^\/recalculate$/];
+
+function adminGate(req, res, next) {
+  if (req.user && req.user.isAdmin) return next();
+  if (req.user && req.user.role === 'manager') {
+    const p = req.path; // נתיב יחסי לנקודת ההרכבה (/api/admin)
+    const allowed = MANAGER_ANY.some(rx => rx.test(p))
+      || (req.method === 'GET' && MANAGER_GET.some(rx => rx.test(p)));
+    if (allowed) return next();
+  }
+  return res.status(403).json({ error: 'גישה זו מוגבלת למנהלי מערכת' });
+}
+
+// מנהל-משנה אינו רשאי לפעול על מנהלים / מנהלי-משנה אחרים (הגנת הרשאות)
+async function ensureCanManageTarget(req, res, targetId) {
+  if (req.user.isAdmin) return true;
+  const target = await db.one('SELECT is_admin, role FROM users WHERE id = ?', [targetId]);
+  const targetRole = target?.is_admin ? 'admin' : (target?.role || 'user');
+  if (targetRole !== 'user') {
+    res.status(403).json({ error: 'אין הרשאה לפעול על משתמש זה' });
+    return false;
+  }
+  return true;
+}
+
+router.use(auth(), adminGate);
 
 // סיכום מצב המערכת
 router.get('/overview', async (req, res) => {
@@ -412,7 +449,7 @@ router.get('/overview', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const rows = await db.query(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       ORDER BY u.id DESC
@@ -439,14 +476,20 @@ router.post('/users', async (req, res) => {
     const exists = await db.one('SELECT id FROM users WHERE email = ?', [email]);
     if (exists) return res.status(409).json({ error: 'אימייל זה כבר קיים במערכת' });
 
+    // רק מנהל מערכת מלא רשאי לקבוע תפקיד; אחרת ברירת המחדל היא משתמש רגיל
+    let role = 'user';
+    if (req.user.isAdmin && ['user', 'manager', 'admin'].includes(String(req.body?.role || ''))) {
+      role = String(req.body.role);
+    }
+
     const hash = bcrypt.hashSync(password, 10);
     const r = await db.run(
-      `INSERT INTO users (email, name, phone_number, department, password_hash, password_changed, is_admin)
-       VALUES (?, ?, ?, ?, ?, 0, 0)`,
-      [email, name, phoneNumber || null, department || null, hash]
+      `INSERT INTO users (email, name, phone_number, department, password_hash, password_changed, is_admin, role)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+      [email, name, phoneNumber || null, department || null, hash, role === 'admin' ? 1 : 0, role]
     );
     const user = await db.one(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       WHERE u.id = ?
@@ -605,7 +648,7 @@ router.get('/footer-docs', async (req, res) => {
   try {
     await db.tx(async (t) => seedFooterDocuments(t));
     const docs = await db.query(`
-      SELECT id, doc_key, label, file_url, file_type, sort_order
+      SELECT id, doc_key, label, file_url, file_name, file_type, sort_order
       FROM footer_documents
       ORDER BY sort_order ASC, id ASC
     `);
@@ -673,20 +716,22 @@ router.post('/footer-docs/:key', upload.single('file'), async (req, res) => {
     const label = String(req.body?.label || '').trim() || doc.label;
     let fileUrl = doc.file_url || null;
     let fileType = doc.file_type || 'pdf';
+    let fileName = doc.file_name || null;
 
     if (req.file) {
-      const uploaded = await replaceFooterDocAsset(key, req.file);
+      const uploaded = await replaceFooterDocAsset(key, req.file, doc.file_url);
       fileUrl = uploaded.url;
       fileType = uploaded.type;
+      fileName = uploaded.name;
     }
 
     await db.run(
-      'UPDATE footer_documents SET label = ?, file_url = ?, file_type = ? WHERE doc_key = ?',
-      [label, fileUrl, fileType, key]
+      'UPDATE footer_documents SET label = ?, file_url = ?, file_name = ?, file_type = ? WHERE doc_key = ?',
+      [label, fileUrl, fileName, fileType, key]
     );
 
     const updated = await db.one(`
-      SELECT id, doc_key, label, file_url, file_type, sort_order
+      SELECT id, doc_key, label, file_url, file_name, file_type, sort_order
       FROM footer_documents
       WHERE doc_key = ?
     `, [key]);
@@ -1055,8 +1100,16 @@ router.patch('/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'משתמש לא תקין' });
     }
 
-    const current = await db.one('SELECT id, is_admin FROM users WHERE id = ?', [id]);
+    const current = await db.one('SELECT id, is_admin, role FROM users WHERE id = ?', [id]);
     if (!current) return res.status(404).json({ error: 'משתמש לא נמצא' });
+
+    // מנהל-משנה אינו רשאי לערוך מנהלים / מנהלי-משנה אחרים
+    if (!req.user.isAdmin) {
+      const targetRole = current.is_admin ? 'admin' : (current.role || 'user');
+      if (targetRole !== 'user') {
+        return res.status(403).json({ error: 'אין הרשאה לערוך משתמש זה' });
+      }
+    }
 
     const name = String(req.body?.name || '').trim();
     const email = String(req.body?.email || '').trim().toLowerCase();
@@ -1076,20 +1129,32 @@ router.patch('/users/:id', async (req, res) => {
       ? null
       : (req.body.can_guess_groups ? 1 : 0);
 
-    if (canGuessGroups === null) {
-      await db.run(
-        'UPDATE users SET name = ?, email = ?, phone_number = ?, department = ? WHERE id = ?',
-        [name, email, phoneNumber || null, department || null, id]
-      );
-    } else {
-      await db.run(
-        'UPDATE users SET name = ?, email = ?, phone_number = ?, department = ?, can_guess_groups = ? WHERE id = ?',
-        [name, email, phoneNumber || null, department || null, canGuessGroups, id]
-      );
+    // רק מנהל מערכת מלא רשאי לשנות תפקיד
+    let nextRole = null;
+    if (req.user.isAdmin && req.body?.role !== undefined) {
+      const r = String(req.body.role);
+      if (!['user', 'manager', 'admin'].includes(r)) {
+        return res.status(400).json({ error: 'תפקיד לא תקין' });
+      }
+      // מנהל מערכת לא יכול להוריד את עצמו מתפקיד admin (מניעת נעילה עצמית)
+      if (req.user.id === id && r !== 'admin') {
+        return res.status(400).json({ error: 'לא ניתן לשנות את התפקיד של עצמך' });
+      }
+      nextRole = r;
     }
 
+    const sets = ['name = ?', 'email = ?', 'phone_number = ?', 'department = ?'];
+    const params = [name, email, phoneNumber || null, department || null];
+    if (canGuessGroups !== null) { sets.push('can_guess_groups = ?'); params.push(canGuessGroups); }
+    if (nextRole !== null) {
+      sets.push('role = ?'); params.push(nextRole);
+      sets.push('is_admin = ?'); params.push(nextRole === 'admin' ? 1 : 0);
+    }
+    params.push(id);
+    await db.run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, params);
+
     const updated = await db.one(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       WHERE u.id = ?
@@ -1112,6 +1177,7 @@ router.post('/users/:id/reset-password', async (req, res) => {
 
     const user = await db.one('SELECT id, email, name FROM users WHERE id = ?', [id]);
     if (!user) return res.status(404).json({ error: 'משתמש לא נמצא' });
+    if (!await ensureCanManageTarget(req, res, id)) return;
 
     const password = randomPassword(10);
     const hash = bcrypt.hashSync(password, 10);
@@ -1129,6 +1195,7 @@ router.delete('/users/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (id === req.user.id) return res.status(400).json({ error: 'לא ניתן למחוק את עצמך' });
+    if (!await ensureCanManageTarget(req, res, id)) return;
     await db.run('DELETE FROM users WHERE id = ?', [id]);
     res.json({ ok: true });
   } catch (e) {

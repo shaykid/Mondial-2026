@@ -41,7 +41,7 @@ export default function Header() {
           )}
           <NavLink to="/leaderboard" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.leaderboard')}</NavLink>
           <NavLink to="/profile" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.profile')}</NavLink>
-          {user.isAdmin && (
+          {(user.isAdmin || user.role === 'manager') && (
             <NavLink to="/admin" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.admin')}</NavLink>
           )}
         </nav>

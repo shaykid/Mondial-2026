@@ -35,7 +35,7 @@ export default function App() {
         <Route path="/guess-groups/:id" element={<ProtectedRoute requireGuessGroups><GuessGroupDetail /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute staffOnly><Admin /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <SiteFooter />
