@@ -304,6 +304,17 @@ function assertGmailSettings(settings) {
   }
 }
 
+// הופך שגיאת התחברות של Gmail להודעה ברורה: רוב הכשלים נובעים משימוש בסיסמת
+// החשבון הרגילה במקום ב"סיסמת אפליקציה" (App Password) בת 16 תווים.
+function friendlyMailError(message, mode) {
+  const m = String(message || '');
+  if (mode === 'gmail' && /Application-specific password|Username and Password not accepted|InvalidSecondFactor|BadCredentials|5\.7\.[89]/i.test(m)) {
+    return 'התחברות ל-Gmail נכשלה: יש להשתמש ב"סיסמת אפליקציה" (App Password) בת 16 תווים מחשבון Google ' +
+      '(לאחר הפעלת אימות דו-שלבי), ולא בסיסמת החשבון הרגילה.';
+  }
+  return m;
+}
+
 function buildEmailHtml(body, extraLines) {
   const bodyHtml = String(body || '')
     .split(/\r?\n/)
@@ -1487,12 +1498,13 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
           WHERE campaign_id = ? AND recipient_email = ?
         `, [campaignId, recipient.email]);
       } catch (error) {
-        failed.push({ email: recipient.email, error: error.message });
+        const friendly = friendlyMailError(error.message, userDeliveryMode);
+        failed.push({ email: recipient.email, error: friendly });
         await db.run(`
           UPDATE email_campaign_recipients
           SET status = 'failed', error_message = ?
           WHERE campaign_id = ? AND recipient_email = ?
-        `, [String(error.message || 'send failed').slice(0, 4000), campaignId, recipient.email]);
+        `, [String(friendly || 'send failed').slice(0, 4000), campaignId, recipient.email]);
       }
     }
 
