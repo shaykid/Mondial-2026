@@ -1263,12 +1263,19 @@ function SettingsTab() {
                   </div>
                   <div className="field">
                     <label>החלפת קובץ</label>
-                    {docDraft.file_url && (
+                    {docDraft.file_url ? (
                       <div style={{ fontSize: 13, marginBottom: 6 }}>
                         קובץ נוכחי:{' '}
                         <a href={docDraft.file_url} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>
-                          {docDraft.file_name || (docDraft.file_type === 'image' ? 'תמונה' : 'PDF')}
+                          {docDraft.file_url}
                         </a>
+                        {docDraft.file_name && (
+                          <span style={{ color: 'var(--muted)' }}> ({docDraft.file_name})</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, marginBottom: 6, color: 'var(--muted)' }}>
+                        לא הוגדר קובץ לקישור זה עדיין
                       </div>
                     )}
                     <input
