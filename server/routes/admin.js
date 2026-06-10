@@ -28,6 +28,20 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+async function ensureWritableDir(candidates) {
+  let lastError = null;
+  for (const dir of candidates) {
+    try {
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.access(dir, fs.constants.W_OK);
+      return dir;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error('no writable directory');
+}
+
 function randomPassword(len = 10) {
   return crypto.randomBytes(16).toString('base64url').replace(/[^a-zA-Z0-9]/g, '').slice(0, len);
 }
@@ -330,8 +344,11 @@ async function replaceScheduleAsset(itemId, fieldName, file, suffix) {
 }
 
 async function appendEmailSendLog(entry) {
-  const logsDir = path.join(__dirname, '..', '..', 'data', 'logs');
-  await fs.promises.mkdir(logsDir, { recursive: true });
+  const logsDir = await ensureWritableDir([
+    path.join(__dirname, '..', '..', 'data', 'logs'),
+    path.join(__dirname, '..', '..', 'server', 'data', 'logs'),
+    path.join(__dirname, '..', '..', 'data', 'profile_images', 'logs')
+  ]);
   const monthKey = new Date().toISOString().slice(0, 7);
   const logPath = path.join(logsDir, `email-sends-${monthKey}.log`);
   await fs.promises.appendFile(logPath, `${JSON.stringify(entry)}\n`, 'utf8');
@@ -821,6 +838,10 @@ router.get('/users/export', async (req, res) => {
 router.post('/users/import', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'יש לבחור קובץ' });
+    const importMode = String(req.body?.import_mode || 'replace_existing').trim();
+    if (!['replace_existing', 'replace_all'].includes(importMode)) {
+      return res.status(400).json({ error: 'מצב ייבוא לא תקין' });
+    }
 
     const filename = req.file.originalname || '';
     const lower = filename.toLowerCase();
@@ -834,10 +855,16 @@ router.post('/users/import', upload.single('file'), async (req, res) => {
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
     if (!rows.length) return res.status(400).json({ error: 'לא נמצאו שורות לייבוא' });
 
-    const summary = { created: 0, updated: 0, skipped: 0 };
+    const summary = { created: 0, updated: 0, skipped: 0, cleared: 0, import_mode: importMode };
     const generated = [];
 
     await db.tx(async (t) => {
+      if (importMode === 'replace_all') {
+        const countRow = await t.one('SELECT COUNT(*) AS n FROM users WHERE is_admin = 0');
+        summary.cleared = Number(countRow?.n || 0);
+        await t.run('DELETE FROM users WHERE is_admin = 0');
+      }
+
       for (const row of rows) {
         const name = pickField(row, ['שם מלא', 'full name', 'fullname', 'name']);
         const email = pickField(row, ['email (username)', 'email', 'username', 'אימייל']).toLowerCase();
@@ -1440,29 +1467,33 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       'UPDATE email_campaigns SET recipient_count = ?, manager_report_sent = ? WHERE id = ?',
       [sent.length, managerReportSent ? 1 : 0, campaignId]
     );
-    await appendEmailSendLog({
-      created_at: new Date().toISOString(),
-      campaign_id: campaignId,
-      created_by_user_id: req.user?.id || null,
-      subject,
-      body,
-      include_login_details: includeLoginDetails,
-      department_filter: department || null,
-      user_delivery_mode: userDeliveryMode,
-      sender_email: userSenderEmail,
-      manager_email: managerEmail || null,
-      sent_count: sent.length,
-      failed_count: failed.length,
-      recipients: recipients.map((recipient) => ({
-        id: recipient.id,
-        name: recipient.name,
-        email: recipient.email,
-        phone_number: recipient.phone_number || null,
-        department: recipient.department || null,
-        status: sent.includes(recipient.email) ? 'sent' : 'failed'
-      })),
-      attachments: attachmentMeta
-    });
+    try {
+      await appendEmailSendLog({
+        created_at: new Date().toISOString(),
+        campaign_id: campaignId,
+        created_by_user_id: req.user?.id || null,
+        subject,
+        body,
+        include_login_details: includeLoginDetails,
+        department_filter: department || null,
+        user_delivery_mode: userDeliveryMode,
+        sender_email: userSenderEmail,
+        manager_email: managerEmail || null,
+        sent_count: sent.length,
+        failed_count: failed.length,
+        recipients: recipients.map((recipient) => ({
+          id: recipient.id,
+          name: recipient.name,
+          email: recipient.email,
+          phone_number: recipient.phone_number || null,
+          department: recipient.department || null,
+          status: sent.includes(recipient.email) ? 'sent' : 'failed'
+        })),
+        attachments: attachmentMeta
+      });
+    } catch (logError) {
+      console.error('admin/send-emails/log:', logError);
+    }
 
     res.json({
       ok: true,

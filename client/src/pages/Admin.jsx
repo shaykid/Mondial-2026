@@ -98,6 +98,7 @@ function UsersTab() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(null);
   const [importFile, setImportFile] = useState(null);
+  const [importMode, setImportMode] = useState('replace_existing');
   const [importResult, setImportResult] = useState(null);
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoResult, setDemoResult] = useState(null);
@@ -273,12 +274,18 @@ function UsersTab() {
       setErr('יש לבחור קובץ לייבוא');
       return;
     }
+    const confirmText = importMode === 'replace_all'
+      ? 'האם לנקות את כל המשתמשים הקיימים שאינם מנהלים, ואז לייבא רק את מה שיש בקובץ?'
+      : 'האם לייבא את הקובץ ולעדכן משתמשים קיימים לפי אימייל?';
+    if (!confirm(confirmText)) return;
+
     setImporting(true);
     setErr('');
     setImportResult(null);
     try {
       const formData = new FormData();
       formData.append('file', importFile);
+      formData.append('import_mode', importMode);
       const { data } = await api.post('/admin/users/import', formData);
       setImportResult(data);
       setImportFile(null);
@@ -328,6 +335,11 @@ function UsersTab() {
       {importResult && (
         <div className="alert alert-success">
           ייבוא הושלם: {importResult.created} נוצרו, {importResult.updated} עודכנו, {importResult.skipped} דולגו.
+          {importResult.import_mode === 'replace_all' && (
+            <div style={{ marginTop: 8 }}>
+              נוקו לפני הייבוא {importResult.cleared} משתמשים קיימים שאינם מנהלים.
+            </div>
+          )}
           {importResult.generated?.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <strong>סיסמאות שנוצרו אוטומטית:</strong>
@@ -385,6 +397,14 @@ function UsersTab() {
           />
           {importFile ? `קובץ: ${importFile.name}` : 'בחר קובץ לייבוא'}
         </label>
+        <select
+          value={importMode}
+          onChange={e => setImportMode(e.target.value)}
+          style={{ minWidth: 220 }}
+        >
+          <option value="replace_existing">ייבוא: החלף קיימים / הוסף חדשים</option>
+          <option value="replace_all">ייבוא: נקה הכל והעלה רק מהקובץ</option>
+        </select>
         <button className="btn btn-sm btn-pitch" onClick={importUsers} disabled={importing || !importFile}>
           {importing ? 'מייבא...' : 'ייבוא משתמשים'}
         </button>
@@ -393,7 +413,7 @@ function UsersTab() {
         </button>
       </div>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -6, marginBottom: 16 }}>
-        ביצוא, עמודת הסיסמה נשארת ריקה כי המערכת שומרת רק גיבוב סיסמה.
+        ביצוא, עמודת הסיסמה נשארת ריקה כי המערכת שומרת רק גיבוב סיסמה. לפני הייבוא בחר האם לעדכן קיימים או לנקות את כל המשתמשים שאינם מנהלים ולהעלות רק את תוכן הקובץ.
       </p>
       <div style={{
         background: 'var(--paper-pure)',
@@ -1008,6 +1028,15 @@ function SettingsTab() {
       {err && <div className="alert alert-error">{err}</div>}
       {ok  && <div className="alert alert-success">{ok}</div>}
 
+      <SettingsCard title="צור קשר">
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          משתמשים שולחים שם, טלפון, טקסט ותמונה. פתח את רשימת הפניות כדי לסמן טופל או למחוק.
+        </p>
+        <button className="btn btn-outline" onClick={() => setContactListOpen(true)}>
+          פתח רשימת פניות ({contactMessages.length})
+        </button>
+      </SettingsCard>
+
       <SettingsCard title="ניקוד">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <NumField label="ניחוש מדויק" value={draft.scoring_exact}     onChange={v => upd('scoring_exact', v)} />
@@ -1279,15 +1308,6 @@ function SettingsTab() {
             );
           })}
         </div>
-      </SettingsCard>
-
-      <SettingsCard title="צור קשר">
-        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          משתמשים שולחים שם, טלפון, טקסט ותמונה. פתח את רשימת הפניות כדי לסמן טופל או למחוק.
-        </p>
-        <button className="btn btn-outline" onClick={() => setContactListOpen(true)}>
-          פתח רשימת פניות ({contactMessages.length})
-        </button>
       </SettingsCard>
 
       <button
