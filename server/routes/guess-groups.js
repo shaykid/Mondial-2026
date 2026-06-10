@@ -208,8 +208,8 @@ router.get('/:id', auth(), async (req, res) => {
       SELECT b.id, b.match_id, b.pick, b.points,
         m.kickoff, m.status, m.home_code, m.away_code,
         m.home_score AS actual_home, m.away_score AS actual_away,
-        th.name_he AS home_name, th.name_en AS home_name_en,
-        ta.name_he AS away_name, ta.name_en AS away_name_en
+        th.name_he AS home_name, th.name_en AS home_name_en, th.name_ar AS home_name_ar,
+        ta.name_he AS away_name, ta.name_en AS away_name_en, ta.name_ar AS away_name_ar
       FROM guess_group_bets b
       JOIN matches m ON m.id = b.match_id
       JOIN teams th ON th.code = m.home_code
