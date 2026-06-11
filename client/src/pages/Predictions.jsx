@@ -404,16 +404,16 @@ export default function Predictions() {
                         />
                       </div>
                       <span className="match-time-under">{time}</span>
+                      {finished && m.home_score != null && m.away_score != null && (
+                        <span className="match-final-score">
+                          {t('predictions.result', { home: m.home_score, away: m.away_score })}
+                        </span>
+                      )}
                     </div>
 
                     <div className="match-team away">
                       <Flag code={m.away_code} size="sm" title={awayName} />
                       <span className="name">{awayName}</span>
-                      {(p.actual_home != null && p.actual_away != null) && (
-                        <span className="numeric" style={{marginInlineStart: 12, padding:'2px 8px', background:'var(--ink)', color:'var(--gold)', fontSize:14, borderRadius:2}}>
-                          {t('predictions.result', { home: p.actual_home, away: p.actual_away })}
-                        </span>
-                      )}
                       {p.points != null && p.points > 0 && (
                         <span className={`points-pill ${p.points >= 5 ? 'exact' : p.points >= 3 ? 'high' : ''}`}>
                           {p.points} {t('common.points')}

@@ -879,6 +879,15 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   font-size: 12px;
   white-space: nowrap;
 }
+.match-final-score {
+  background: var(--ink);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
 .scores-block {
   display: flex;
   gap: 8px;
