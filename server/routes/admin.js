@@ -904,56 +904,62 @@ router.get('/users/export', async (req, res) => {
   }
 });
 
+const MISSING_HEADERS = ['שם', 'טלפון', 'מספר נקודות', 'מיקום נוכחי', 'ניחושים שמולאו'];
+
+// בונה את שורות דוח החוסרים (משתמשים שחסר להם לפחות 40% מהניחושים ל-N המשחקים הקרובים)
+async function buildMissingGuessesRows(count) {
+  const upcoming = await db.query(`
+    SELECT id FROM matches
+    WHERE status <> 'finished' AND kickoff >= NOW()
+    ORDER BY kickoff ASC
+    LIMIT ${count}
+  `);
+  if (!upcoming.length) return [];
+  const ids = upcoming.map((m) => m.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const maxFilled = 0.6 * ids.length; // חוסר של לפחות 40% ⇔ filled <= 0.6*N
+  const rows = await db.query(`
+    SELECT u.id, u.name, u.phone_number,
+      (SELECT COUNT(*) FROM predictions p
+         WHERE p.user_id = u.id AND p.match_id IN (${placeholders})) AS filled
+    FROM users u
+    WHERE u.is_admin = 0 AND u.is_guest = 0
+    HAVING filled <= ?
+    ORDER BY u.name ASC
+  `, [...ids, maxFilled]);
+  const board = await leaderboard();
+  const byId = new Map(board.map((b) => [b.id, b]));
+  return rows.map((r) => {
+    const lb = byId.get(r.id);
+    return {
+      'שם': r.name || '',
+      'טלפון': r.phone_number || '',
+      'מספר נקודות': lb ? lb.total_points : 0,
+      'מיקום נוכחי': lb ? lb.rank : '',
+      'ניחושים שמולאו': `${r.filled}/${ids.length}`
+    };
+  });
+}
+
+function rowsToXlsxBuffer(data, headers, sheetName) {
+  const ws = data.length
+    ? XLSX.utils.json_to_sheet(data, { header: headers })
+    : XLSX.utils.aoa_to_sheet([headers]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+}
+
 // ייצוא XLS של משתמשים (שם, טלפון) שחסרים להם לפחות 40% מהניחושים ל-N המשחקים הקרובים
 // ?games=5 (ברירת מחדל) ?format=xlsx|csv.
 router.get('/users/export-missing', async (req, res) => {
   try {
     const format = String(req.query.format || 'xlsx').toLowerCase();
     const count = Math.min(Math.max(parseInt(req.query.games, 10) || 5, 1), 20);
-
-    // המשחקים הקרובים שטרם התחילו/הסתיימו (לפי זמן פתיחה)
-    const upcoming = await db.query(`
-      SELECT id FROM matches
-      WHERE status <> 'finished' AND kickoff >= NOW()
-      ORDER BY kickoff ASC
-      LIMIT ${count}
-    `);
-
-    let data = [];
-    if (upcoming.length) {
-      const ids = upcoming.map((m) => m.id);
-      const placeholders = ids.map(() => '?').join(',');
-      // חוסר של לפחות 40% מהניחושים: filled <= 0.6*N  (כלומר missing >= 0.4*N)
-      const maxFilled = 0.6 * ids.length;
-      // משתמשים אמיתיים (לא מנהל/אורח) שחסרים להם לפחות 40% מהניחושים במשחקים הקרובים
-      const rows = await db.query(`
-        SELECT u.id, u.name, u.phone_number,
-          (SELECT COUNT(*) FROM predictions p
-             WHERE p.user_id = u.id AND p.match_id IN (${placeholders})) AS filled
-        FROM users u
-        WHERE u.is_admin = 0 AND u.is_guest = 0
-        HAVING filled <= ?
-        ORDER BY u.name ASC
-      `, [...ids, maxFilled]);
-      // נקודות ומיקום נוכחי לכל משתמש מתוך טבלת הדירוג
-      const board = await leaderboard();
-      const byId = new Map(board.map((b) => [b.id, b]));
-      data = rows.map((r) => {
-        const lb = byId.get(r.id);
-        return {
-          'שם': r.name || '',
-          'טלפון': r.phone_number || '',
-          'מספר נקודות': lb ? lb.total_points : 0,
-          'מיקום נוכחי': lb ? lb.rank : '',
-          'ניחושים שמולאו': `${r.filled}/${ids.length}`
-        };
-      });
-    }
-
-    const headers = ['שם', 'טלפון', 'מספר נקודות', 'מיקום נוכחי', 'ניחושים שמולאו'];
+    const data = await buildMissingGuessesRows(count);
     const ws = data.length
-      ? XLSX.utils.json_to_sheet(data, { header: headers })
-      : XLSX.utils.aoa_to_sheet([headers]);
+      ? XLSX.utils.json_to_sheet(data, { header: MISSING_HEADERS })
+      : XLSX.utils.aoa_to_sheet([MISSING_HEADERS]);
     const baseName = `missing-guesses-${count}games-${new Date().toISOString().slice(0, 10)}`;
 
     if (format === 'csv') {
@@ -963,15 +969,53 @@ router.get('/users/export-missing', async (req, res) => {
       return res.send('﻿' + csv); // BOM כדי ש-Excel יציג עברית כראוי
     }
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MissingGuesses');
-    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    const buf = rowsToXlsxBuffer(data, MISSING_HEADERS, 'MissingGuesses');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
     return res.send(buf);
   } catch (e) {
     console.error('admin/users/export-missing:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// יוצר קובץ XLS ציבורי (כתובת עם טוקן, ללא צורך בהתחברות) של דוח החוסרים ומחזיר URL מלא,
+// לשימוש כשליחת וואטסאפ דרך TmpSender. ?games=N  ?only_phone=05... (מצב בדיקה — שורה אחת)
+router.post('/users/export-missing-link', async (req, res) => {
+  try {
+    const count = Math.min(Math.max(parseInt(req.query.games, 10) || 5, 1), 20);
+    const onlyPhone = String(req.query.only_phone || '').replace(/[^\d+]/g, '');
+
+    let data = await buildMissingGuessesRows(count);
+    if (onlyPhone) {
+      // מצב בדיקה: שורה יחידה למספר שנמסר (אם קיים בדוח — נשתמש בנתוניו, אחרת שורת בדיקה)
+      const found = data.find((r) => String(r['טלפון']).replace(/[^\d+]/g, '') === onlyPhone);
+      data = [found || { 'שם': 'בדיקה', 'טלפון': onlyPhone, 'מספר נקודות': 0, 'מיקום נוכחי': '', 'ניחושים שמולאו': `0/${count}` }];
+    }
+
+    const buf = rowsToXlsxBuffer(data, MISSING_HEADERS, 'MissingGuesses');
+    const dir = path.join(__dirname, '..', '..', 'data', 'wa_exports');
+    await fs.promises.mkdir(dir, { recursive: true });
+    // ניקוי קבצים ישנים (מעל שעתיים) כדי לא לצבור קבצים זמניים
+    try {
+      const now = Date.now();
+      for (const f of await fs.promises.readdir(dir)) {
+        const st = await fs.promises.stat(path.join(dir, f)).catch(() => null);
+        if (st && now - st.mtimeMs > 2 * 3600 * 1000) await fs.promises.rm(path.join(dir, f), { force: true }).catch(() => {});
+      }
+    } catch {}
+    const name = `missing-${randomPassword(24)}.xlsx`;
+    await fs.promises.writeFile(path.join(dir, name), buf);
+
+    const settings = await readSettingsMap(['site_url']);
+    let base = String(settings.site_url || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) base = `${req.protocol}://${req.get('host')}`;
+    const url = `${base}/data/wa_exports/${name}`;
+
+    res.json({ ok: true, url, count: data.length });
+  } catch (e) {
+    console.error('admin/users/export-missing-link:', e);
+    res.status(500).json({ error: e.message || 'שגיאת שרת' });
   }
 });
 

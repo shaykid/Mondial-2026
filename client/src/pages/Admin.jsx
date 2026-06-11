@@ -962,6 +962,7 @@ function MatchesTab() {
 function MissingGuessesTab() {
   const [missingGames, setMissingGames] = useState(5);
   const [exporting, setExporting] = useState(null);
+  const [waBusy, setWaBusy] = useState(false);
   const [err, setErr] = useState('');
 
   // תיבה שנייה: לפי מחלקה + טווח כמות ניחושים שהוזנו
@@ -1007,6 +1008,21 @@ function MissingGuessesTab() {
       setErr(errMsg(e));
     } finally {
       setExporting(null);
+    }
+  };
+
+  // יוצר קובץ XLS ציבורי וקופץ ל-TmpSender לשליחת וואטסאפ (תבנית mon2026_high_scores)
+  const sendWhatsapp = async () => {
+    setWaBusy(true); setErr('');
+    try {
+      const { data } = await api.post(`/admin/users/export-missing-link?games=${missingGames}`);
+      const url = 'https://tmpsender.seach.co.il/?xls=' + encodeURIComponent(data.url)
+        + '&template=' + encodeURIComponent('mon2026_high_scores');
+      window.open(url, '_blank');
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setWaBusy(false);
     }
   };
 
@@ -1063,6 +1079,14 @@ function MissingGuessesTab() {
             disabled={exporting !== null}
           >
             {exporting === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ background: '#25D366', color: '#fff', borderColor: '#25D366' }}
+            onClick={sendWhatsapp}
+            disabled={waBusy}
+          >
+            {waBusy ? 'פותח...' : 'שלח ב-WhatsApp'}
           </button>
         </div>
       </SettingsCard>
