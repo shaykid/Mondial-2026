@@ -966,6 +966,68 @@ router.get('/users/export-missing', async (req, res) => {
   }
 });
 
+// ייצוא XLS של משתמשים (שם, טלפון, מחלקה) לפי מחלקה ולפי כמות הניחושים שהוזנו
+// ?department=<שם מחלקה|all> &min=X (יותר מ-) &max=Y (פחות מ-) &format=xlsx|csv
+router.get('/users/export-by-activity', async (req, res) => {
+  try {
+    const format = String(req.query.format || 'xlsx').toLowerCase();
+
+    const whereParts = ['u.is_admin = 0', 'u.is_guest = 0'];
+    const whereParams = [];
+    const dep = String(req.query.department || '').trim();
+    if (dep && dep.toLowerCase() !== 'all') {
+      whereParts.push('u.department = ?');
+      whereParams.push(dep);
+    }
+
+    // יותר מ-X / פחות מ-Y (אי-שוויון חמור); כל גבול אופציונלי
+    const havingParts = [];
+    const havingParams = [];
+    const min = parseInt(req.query.min, 10);
+    const max = parseInt(req.query.max, 10);
+    if (Number.isInteger(min)) { havingParts.push('cnt > ?'); havingParams.push(min); }
+    if (Number.isInteger(max)) { havingParts.push('cnt < ?'); havingParams.push(max); }
+
+    const rows = await db.query(`
+      SELECT u.name, u.phone_number, u.department,
+        (SELECT COUNT(*) FROM predictions p WHERE p.user_id = u.id) AS cnt
+      FROM users u
+      WHERE ${whereParts.join(' AND ')}
+      ${havingParts.length ? 'HAVING ' + havingParts.join(' AND ') : ''}
+      ORDER BY u.name ASC
+    `, [...whereParams, ...havingParams]);
+
+    const data = rows.map((r) => ({
+      'שם': r.name || '',
+      'טלפון': r.phone_number || '',
+      'מחלקה': r.department || '',
+      'מספר ניחושים': r.cnt
+    }));
+    const headers = ['שם', 'טלפון', 'מחלקה', 'מספר ניחושים'];
+    const ws = data.length
+      ? XLSX.utils.json_to_sheet(data, { header: headers })
+      : XLSX.utils.aoa_to_sheet([headers]);
+    const baseName = `users-by-guesses-${new Date().toISOString().slice(0, 10)}`;
+
+    if (format === 'csv') {
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.csv"`);
+      return res.send('﻿' + csv); // BOM כדי ש-Excel יציג עברית כראוי
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'UsersByGuesses');
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
+    return res.send(buf);
+  } catch (e) {
+    console.error('admin/users/export-by-activity:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
 // ייבוא משתמשים מ-CSV/XLSX
 router.post('/users/import', upload.single('file'), async (req, res) => {
   try {

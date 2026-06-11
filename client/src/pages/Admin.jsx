@@ -964,6 +964,35 @@ function MissingGuessesTab() {
   const [exporting, setExporting] = useState(null);
   const [err, setErr] = useState('');
 
+  // תיבה שנייה: לפי מחלקה + טווח כמות ניחושים שהוזנו
+  const [departments, setDepartments] = useState([]);
+  const [actDept, setActDept] = useState('all');
+  const [actMin, setActMin] = useState('');
+  const [actMax, setActMax] = useState('');
+  const [exportingAct, setExportingAct] = useState(null);
+
+  useEffect(() => {
+    api.get('/admin/departments')
+      .then((res) => setDepartments(res.data.departments || []))
+      .catch(() => setDepartments([]));
+  }, []);
+
+  const downloadBlob = (data, format, baseName) => {
+    const blob = new Blob([data], {
+      type: format === 'csv'
+        ? 'text/csv;charset=utf-8'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseName}.${format === 'csv' ? 'csv' : 'xlsx'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const exportMissing = async (format) => {
     setExporting(format);
     setErr('');
@@ -972,23 +1001,30 @@ function MissingGuessesTab() {
         `/admin/users/export-missing?format=${format}&games=${missingGames}`,
         { responseType: 'blob' }
       );
-      const blob = new Blob([data], {
-        type: format === 'csv'
-          ? 'text/csv;charset=utf-8'
-          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `missing-guesses-${missingGames}games.${format === 'csv' ? 'csv' : 'xlsx'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(data, format, `missing-guesses-${missingGames}games`);
     } catch (e) {
       setErr(errMsg(e));
     } finally {
       setExporting(null);
+    }
+  };
+
+  const exportActivity = async (format) => {
+    setExportingAct(format);
+    setErr('');
+    try {
+      const params = new URLSearchParams({ format, department: actDept });
+      if (actMin !== '') params.set('min', actMin);
+      if (actMax !== '') params.set('max', actMax);
+      const { data } = await api.get(
+        `/admin/users/export-by-activity?${params.toString()}`,
+        { responseType: 'blob' }
+      );
+      downloadBlob(data, format, `users-by-guesses`);
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setExportingAct(null);
     }
   };
 
@@ -1025,6 +1061,58 @@ function MissingGuessesTab() {
             disabled={exporting !== null}
           >
             {exporting === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
+          </button>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="ייצוא: לפי מחלקה וכמות ניחושים">
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          קובץ Excel עם שם, טלפון ומחלקה של משתמשים ממחלקה נבחרת, לפי כמות הניחושים
+          שהוזנו (יותר מ-X, פחות מ-Y). השאר ריק כדי לא להגביל גבול.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          <div className="field" style={{ minWidth: 180 }}>
+            <label>מחלקה</label>
+            <select value={actDept} onChange={(e) => setActDept(e.target.value)}>
+              <option value="all">כל המחלקות</option>
+              {departments.map((dep) => (
+                <option key={dep} value={dep}>{dep}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ maxWidth: 140 }}>
+            <label>יותר מ- (X)</label>
+            <input
+              type="number"
+              min={0}
+              value={actMin}
+              placeholder="ללא"
+              onChange={(e) => setActMin(e.target.value)}
+            />
+          </div>
+          <div className="field" style={{ maxWidth: 140 }}>
+            <label>פחות מ- (Y)</label>
+            <input
+              type="number"
+              min={0}
+              value={actMax}
+              placeholder="ללא"
+              onChange={(e) => setActMax(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-sm btn-gold"
+            onClick={() => exportActivity('xlsx')}
+            disabled={exportingAct !== null}
+          >
+            {exportingAct === 'xlsx' ? 'מייצא...' : 'ייצוא XLSX'}
+          </button>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={() => exportActivity('csv')}
+            disabled={exportingAct !== null}
+          >
+            {exportingAct === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
           </button>
         </div>
       </SettingsCard>
