@@ -998,8 +998,8 @@ function MissingGuessesTab() {
 
       <SettingsCard title="ייצוא: לא ניחשו למשחקים הקרובים">
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          קובץ Excel עם שם, שם משתמש (email) וטלפון של כל המשתמשים שחסר להם לפחות
-          ניחוש אחד מבין המשחקים הקרובים (לתזכורת).
+          קובץ Excel עם שם וטלפון של כל המשתמשים שחסר להם לפחות 40% מהניחושים
+          במשחקים הקרובים (לתזכורת).
         </p>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
           <div className="field" style={{ maxWidth: 170 }}>

@@ -903,8 +903,8 @@ router.get('/users/export', async (req, res) => {
   }
 });
 
-// ייצוא XLS של משתמשים (שם, שם-משתמש, טלפון) שלא מילאו ניחוש לאחד מ-N המשחקים הקרובים
-// ?games=5 (ברירת מחדל) ?format=xlsx|csv. "לא ניחש" = חסר ניחוש לפחות למשחק אחד מהקרובים.
+// ייצוא XLS של משתמשים (שם, טלפון) שחסרים להם לפחות 40% מהניחושים ל-N המשחקים הקרובים
+// ?games=5 (ברירת מחדל) ?format=xlsx|csv.
 router.get('/users/export-missing', async (req, res) => {
   try {
     const format = String(req.query.format || 'xlsx').toLowerCase();
@@ -922,25 +922,26 @@ router.get('/users/export-missing', async (req, res) => {
     if (upcoming.length) {
       const ids = upcoming.map((m) => m.id);
       const placeholders = ids.map(() => '?').join(',');
-      // משתמשים אמיתיים (לא מנהל/אורח) שמספר הניחושים שמילאו מבין המשחקים הקרובים קטן מהמספר המלא
+      // חוסר של לפחות 40% מהניחושים: filled <= 0.6*N  (כלומר missing >= 0.4*N)
+      const maxFilled = 0.6 * ids.length;
+      // משתמשים אמיתיים (לא מנהל/אורח) שחסרים להם לפחות 40% מהניחושים במשחקים הקרובים
       const rows = await db.query(`
-        SELECT u.name, u.email, u.phone_number,
+        SELECT u.name, u.phone_number,
           (SELECT COUNT(*) FROM predictions p
              WHERE p.user_id = u.id AND p.match_id IN (${placeholders})) AS filled
         FROM users u
         WHERE u.is_admin = 0 AND u.is_guest = 0
-        HAVING filled < ?
+        HAVING filled <= ?
         ORDER BY u.name ASC
-      `, [...ids, ids.length]);
+      `, [...ids, maxFilled]);
       data = rows.map((r) => ({
         'שם': r.name || '',
-        'שם משתמש (email)': r.email || '',
         'טלפון': r.phone_number || '',
         'ניחושים שמולאו': `${r.filled}/${ids.length}`
       }));
     }
 
-    const headers = ['שם', 'שם משתמש (email)', 'טלפון', 'ניחושים שמולאו'];
+    const headers = ['שם', 'טלפון', 'ניחושים שמולאו'];
     const ws = data.length
       ? XLSX.utils.json_to_sheet(data, { header: headers })
       : XLSX.utils.aoa_to_sheet([headers]);
