@@ -22,6 +22,7 @@ export default function Admin() {
     { id: 'departments', label: t('admin.tab_departments') },
     { id: 'matches', label: t('admin.tab_matches') },
     { id: 'settings', label: t('admin.tab_settings') },
+    { id: 'missing', label: 'ניחושים חסרים' },
     { id: 'badges', label: t('admin.tab_badges') },
     { id: 'messages', label: 'שליחת הודעות' },
     { id: 'contact', label: 'צור קשר' },
@@ -52,6 +53,7 @@ export default function Admin() {
       {tab === 'departments' && <DepartmentsTab />}
       {tab === 'matches'  && <MatchesTab  />}
       {tab === 'settings' && <SettingsTab />}
+      {tab === 'missing'  && <MissingGuessesTab />}
       {tab === 'badges'   && <BadgesTab   />}
       {tab === 'messages' && <MessagesTab />}
       {tab === 'contact'  && <ContactTab  />}
@@ -956,6 +958,80 @@ function MatchesTab() {
   );
 }
 
+/* ─────────────── ניחושים חסרים (ייצוא לתזכורת) ─────────────── */
+function MissingGuessesTab() {
+  const [missingGames, setMissingGames] = useState(5);
+  const [exporting, setExporting] = useState(null);
+  const [err, setErr] = useState('');
+
+  const exportMissing = async (format) => {
+    setExporting(format);
+    setErr('');
+    try {
+      const { data } = await api.get(
+        `/admin/users/export-missing?format=${format}&games=${missingGames}`,
+        { responseType: 'blob' }
+      );
+      const blob = new Blob([data], {
+        type: format === 'csv'
+          ? 'text/csv;charset=utf-8'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `missing-guesses-${missingGames}games.${format === 'csv' ? 'csv' : 'xlsx'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      {err && <div className="alert alert-error">{err}</div>}
+
+      <SettingsCard title="ייצוא: לא ניחשו למשחקים הקרובים">
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          קובץ Excel עם שם, שם משתמש (email) וטלפון של כל המשתמשים שחסר להם לפחות
+          ניחוש אחד מבין המשחקים הקרובים (לתזכורת).
+        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          <div className="field" style={{ maxWidth: 170 }}>
+            <label>מספר משחקים קרובים</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={missingGames}
+              onChange={(e) => setMissingGames(Math.min(Math.max(parseInt(e.target.value, 10) || 1, 1), 20))}
+            />
+          </div>
+          <button
+            className="btn btn-sm btn-gold"
+            onClick={() => exportMissing('xlsx')}
+            disabled={exporting !== null}
+          >
+            {exporting === 'xlsx' ? 'מייצא...' : 'ייצוא XLSX'}
+          </button>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={() => exportMissing('csv')}
+            disabled={exporting !== null}
+          >
+            {exporting === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
+          </button>
+        </div>
+      </SettingsCard>
+    </div>
+  );
+}
+
 /* ─────────────── הגדרות ─────────────── */
 function SettingsTab() {
   const [settings, setSettings] = useState({});
@@ -963,8 +1039,6 @@ function SettingsTab() {
   const [footerDocs, setFooterDocs] = useState([]);
   const [footerDrafts, setFooterDrafts] = useState({});
   const [savingDocKey, setSavingDocKey] = useState(null);
-  const [missingGames, setMissingGames] = useState(5);
-  const [exportingMissing, setExportingMissing] = useState(null);
   const [err, setErr] = useState('');
   const [ok, setOk]   = useState('');
 
@@ -1032,34 +1106,6 @@ function SettingsTab() {
       setErr(errMsg(e));
     } finally {
       setSavingDocKey(null);
-    }
-  };
-
-  const exportMissing = async (format) => {
-    setExportingMissing(format);
-    setErr(''); setOk('');
-    try {
-      const { data } = await api.get(
-        `/admin/users/export-missing?format=${format}&games=${missingGames}`,
-        { responseType: 'blob' }
-      );
-      const blob = new Blob([data], {
-        type: format === 'csv'
-          ? 'text/csv;charset=utf-8'
-          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `missing-guesses-${missingGames}games.${format === 'csv' ? 'csv' : 'xlsx'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setErr(errMsg(e));
-    } finally {
-      setExportingMissing(null);
     }
   };
 
@@ -1275,39 +1321,6 @@ function SettingsTab() {
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
           כשבוחרים "חשבון Gmail", הודעות למשתתפים יישלחו דרך smtp.gmail.com עם כתובת ה-Gmail וסיסמת האפליקציה
           (יש להפעיל אימות דו-שלבי בחשבון Google וליצור "סיסמת אפליקציה"). דוח המנהלת ימשיך לצאת דרך SMTP של seach.co.il.
-        </div>
-      </SettingsCard>
-
-      <SettingsCard title="ייצוא: לא ניחשו למשחקים הקרובים">
-        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          קובץ Excel עם שם, שם משתמש (email) וטלפון של כל המשתמשים שחסר להם לפחות
-          ניחוש אחד מבין המשחקים הקרובים (לתזכורת).
-        </p>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-          <div className="field" style={{ maxWidth: 170 }}>
-            <label>מספר משחקים קרובים</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={missingGames}
-              onChange={(e) => setMissingGames(Math.min(Math.max(parseInt(e.target.value, 10) || 1, 1), 20))}
-            />
-          </div>
-          <button
-            className="btn btn-sm btn-gold"
-            onClick={() => exportMissing('xlsx')}
-            disabled={exportingMissing !== null}
-          >
-            {exportingMissing === 'xlsx' ? 'מייצא...' : 'ייצוא XLSX'}
-          </button>
-          <button
-            className="btn btn-sm btn-outline"
-            onClick={() => exportMissing('csv')}
-            disabled={exportingMissing !== null}
-          >
-            {exportingMissing === 'csv' ? 'מייצא...' : 'ייצוא CSV'}
-          </button>
         </div>
       </SettingsCard>
 
