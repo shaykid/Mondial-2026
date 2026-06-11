@@ -1680,6 +1680,8 @@ function BadgesTab() {
             onChange={v => updThreshold('min_predictions', v)} />
           <NumField label={t('admin.badge_min_streak')} value={config.thresholds.min_streak}
             onChange={v => updThreshold('min_streak', v)} />
+          <NumField label="מינימום נקודות לקבלת תגים" value={config.thresholds.min_points}
+            onChange={v => updThreshold('min_points', v)} />
         </div>
       </SettingsCard>
 

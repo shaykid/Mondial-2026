@@ -339,7 +339,8 @@ const DEFAULT_BADGE_CONFIG = {
     centurion:     { enabled: true, emoji: '💯' },
     prophet:       { enabled: true, emoji: '⭐' }
   },
-  thresholds: { centurion_points: 100, min_predictions: 5, min_streak: 2 }
+  // min_points: רף נקודות מינימלי כדי לקבל תגים בכלל (תגים מוענקים רק למי שמעל הסף)
+  thresholds: { centurion_points: 100, min_predictions: 5, min_streak: 2, min_points: 13 }
 };
 
 async function loadBadgeConfig() {
@@ -403,6 +404,7 @@ async function assignLeaderboardBadges(rows) {
   const minPreds = Number(cfg.thresholds.min_predictions) || 5;
   const minStreak = Number(cfg.thresholds.min_streak) || 2;
   const centurionPts = Number(cfg.thresholds.centurion_points) || 100;
+  const minPoints = Number.isFinite(Number(cfg.thresholds.min_points)) ? Number(cfg.thresholds.min_points) : 13;
 
   for (const r of rows) {
     r.badges = [];
@@ -412,19 +414,22 @@ async function assignLeaderboardBadges(rows) {
   const streaks = await computeCurrentStreaks();
   for (const r of rows) r.current_streak = streaks.get(r.id) || 0;
 
+  // תגים מוענקים אך ורק למשתמשים עם יותר מ-minPoints נקודות
+  const eligibleRows = rows.filter(r => Number(r.total_points) > minPoints);
+
   const enoughPreds = (r) => r.num_predictions >= minPreds;
 
   // תגי-על (מחזיק יחיד / שוברי-שוויון) — מתחלפים עם שינוי הנתונים
-  assignTopBadge(rows, r => r.exact_hits,      'crown',         cfg, { min: 1 });
-  assignTopBadge(rows, r => r.outcome_hits,    'oracle',        cfg, { min: 1 });
-  assignTopBadge(rows, r => r.gd_hits,         'goal_machine',  cfg, { min: 1 });
-  assignTopBadge(rows, r => r.num_predictions, 'dedicated',     cfg, { min: 1 });
-  assignTopBadge(rows, r => r.current_streak,  'streak',        cfg, { min: minStreak });
-  assignTopBadge(rows, r => r.accuracy,        'sharpshooter',  cfg, { min: 0.0001, eligibleFn: enoughPreds });
-  assignTopBadge(rows, r => r.exact_ratio,     'perfectionist', cfg, { min: 0.0001, eligibleFn: enoughPreds });
+  assignTopBadge(eligibleRows, r => r.exact_hits,      'crown',         cfg, { min: 1 });
+  assignTopBadge(eligibleRows, r => r.outcome_hits,    'oracle',        cfg, { min: 1 });
+  assignTopBadge(eligibleRows, r => r.gd_hits,         'goal_machine',  cfg, { min: 1 });
+  assignTopBadge(eligibleRows, r => r.num_predictions, 'dedicated',     cfg, { min: 1 });
+  assignTopBadge(eligibleRows, r => r.current_streak,  'streak',        cfg, { min: minStreak });
+  assignTopBadge(eligibleRows, r => r.accuracy,        'sharpshooter',  cfg, { min: 0.0001, eligibleFn: enoughPreds });
+  assignTopBadge(eligibleRows, r => r.exact_ratio,     'perfectionist', cfg, { min: 0.0001, eligibleFn: enoughPreds });
 
-  // תגי-סף (כל מי שעומד בתנאי)
-  for (const r of rows) {
+  // תגי-סף (כל מי שעומד בתנאי) — גם הם רק למעל הסף
+  for (const r of eligibleRows) {
     if (r.rank === 1 && r.total_points > 0) pushBadge(r, 'leader', cfg);
     if (r.total_points >= centurionPts) pushBadge(r, 'centurion', cfg);
     if (r.bonus_points > 0) pushBadge(r, 'prophet', cfg);
