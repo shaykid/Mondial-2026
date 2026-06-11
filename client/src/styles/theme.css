@@ -868,6 +868,17 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 .score-input.score-low { background: rgba(239, 68, 68, 0.18); }
 .score-input.score-equal { background: rgba(34, 197, 94, 0.18); }
 
+.scores-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.match-time-under {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .scores-block {
   display: flex;
   gap: 8px;

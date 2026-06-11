@@ -381,27 +381,29 @@ export default function Predictions() {
                     <div className="match-team home">
                       <span className="name">{homeName}</span>
                       <Flag code={m.home_code} size="sm" title={homeName} />
-                      <span style={{color:'var(--muted)', fontSize:12, marginInlineStart: 8}}>{time}</span>
                     </div>
 
-                    <div className="scores-block">
-                      <input
-                        type="number"
-                        className={`score-input ${scoreTone('home', p.home, p.away)}`}
-                        min={0} max={30}
-                        value={p.home ?? ''}
-                        disabled={locked || finished}
-                        onChange={e => onChange(m.id, 'home', e.target.value)}
-                      />
-                      <span className="dash">:</span>
-                      <input
-                        type="number"
-                        className={`score-input ${scoreTone('away', p.home, p.away)}`}
-                        min={0} max={30}
-                        value={p.away ?? ''}
-                        disabled={locked || finished}
-                        onChange={e => onChange(m.id, 'away', e.target.value)}
-                      />
+                    <div className="scores-col">
+                      <div className="scores-block">
+                        <input
+                          type="number"
+                          className={`score-input ${scoreTone('home', p.home, p.away)}`}
+                          min={0} max={30}
+                          value={p.home ?? ''}
+                          disabled={locked || finished}
+                          onChange={e => onChange(m.id, 'home', e.target.value)}
+                        />
+                        <span className="dash">:</span>
+                        <input
+                          type="number"
+                          className={`score-input ${scoreTone('away', p.home, p.away)}`}
+                          min={0} max={30}
+                          value={p.away ?? ''}
+                          disabled={locked || finished}
+                          onChange={e => onChange(m.id, 'away', e.target.value)}
+                        />
+                      </div>
+                      <span className="match-time-under">{time}</span>
                     </div>
 
                     <div className="match-team away">
