@@ -4,6 +4,7 @@ import NewsTicker from './components/NewsTicker';
 import SchedulePopupManager from './components/SchedulePopupManager';
 import SiteFooter from './components/SiteFooter';
 import ProtectedRoute from './components/ProtectedRoute';
+import ShabbatGate from './components/ShabbatGate';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Predictions from './pages/Predictions';
@@ -18,7 +19,7 @@ import Profile from './pages/Profile';
 
 export default function App() {
   return (
-    <>
+    <ShabbatGate>
       <div className="app-topbar">
         <Header />
         <NewsTicker />
@@ -39,6 +40,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <SiteFooter />
-    </>
+    </ShabbatGate>
   );
 }

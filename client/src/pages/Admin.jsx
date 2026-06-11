@@ -1242,6 +1242,21 @@ function SettingsTab() {
       {err && <div className="alert alert-error">{err}</div>}
       {ok  && <div className="alert alert-success">{ok}</div>}
 
+      <SettingsCard title="אתר שומר שבת">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={draft.shabbat_mode === undefined ? true : ['1', 'true', 'on', 'yes'].includes(String(draft.shabbat_mode).toLowerCase())}
+            onChange={(e) => upd('shabbat_mode', e.target.checked ? '1' : '0')}
+          />
+          <span>חסום את האתר בשבת (לפי מיקום הגולש)</span>
+        </label>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+          כשמופעל — בכניסת השבת מוצג לגולשים מסך "שבת שלום" עד צאת השבת, לפי זמני
+          הכניסה/יציאה במיקום הגולש (אזור-הזמן בדפדפן). מנהלים פטורים מהחסימה.
+        </p>
+      </SettingsCard>
+
       <SettingsCard title="ניקוד">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <NumField label="ניחוש מדויק" value={draft.scoring_exact}     onChange={v => upd('scoring_exact', v)} />

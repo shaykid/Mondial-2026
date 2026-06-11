@@ -120,6 +120,7 @@ async function seed() {
     ['site_guess_groups_enabled', process.env.SITE_GUESS_GROUPS_ENABLED || 'false'],
     ['departments',       JSON.stringify(DEFAULT_DEPARTMENTS)],
     ['site_url',          process.env.SITE_URL || 'http://localhost:5225'],
+    ['shabbat_mode',      process.env.SHABBAT_MODE || '1'],
     ['smtp_server',       process.env.SMTP_SERVER || 'smtp.inbox.co.il'],
     ['smtp_port',         process.env.SMTP_PORT || '587'],
     ['smtp_security',     process.env.SMTP_SECURITY || 'STARTTLS'],
