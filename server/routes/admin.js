@@ -903,6 +903,68 @@ router.get('/users/export', async (req, res) => {
   }
 });
 
+// ייצוא XLS של משתמשים (שם, שם-משתמש, טלפון) שלא מילאו ניחוש לאחד מ-N המשחקים הקרובים
+// ?games=5 (ברירת מחדל) ?format=xlsx|csv. "לא ניחש" = חסר ניחוש לפחות למשחק אחד מהקרובים.
+router.get('/users/export-missing', async (req, res) => {
+  try {
+    const format = String(req.query.format || 'xlsx').toLowerCase();
+    const count = Math.min(Math.max(parseInt(req.query.games, 10) || 5, 1), 20);
+
+    // המשחקים הקרובים שטרם התחילו/הסתיימו (לפי זמן פתיחה)
+    const upcoming = await db.query(`
+      SELECT id FROM matches
+      WHERE status <> 'finished' AND kickoff >= NOW()
+      ORDER BY kickoff ASC
+      LIMIT ${count}
+    `);
+
+    let data = [];
+    if (upcoming.length) {
+      const ids = upcoming.map((m) => m.id);
+      const placeholders = ids.map(() => '?').join(',');
+      // משתמשים אמיתיים (לא מנהל/אורח) שמספר הניחושים שמילאו מבין המשחקים הקרובים קטן מהמספר המלא
+      const rows = await db.query(`
+        SELECT u.name, u.email, u.phone_number,
+          (SELECT COUNT(*) FROM predictions p
+             WHERE p.user_id = u.id AND p.match_id IN (${placeholders})) AS filled
+        FROM users u
+        WHERE u.is_admin = 0 AND u.is_guest = 0
+        HAVING filled < ?
+        ORDER BY u.name ASC
+      `, [...ids, ids.length]);
+      data = rows.map((r) => ({
+        'שם': r.name || '',
+        'שם משתמש (email)': r.email || '',
+        'טלפון': r.phone_number || '',
+        'ניחושים שמולאו': `${r.filled}/${ids.length}`
+      }));
+    }
+
+    const headers = ['שם', 'שם משתמש (email)', 'טלפון', 'ניחושים שמולאו'];
+    const ws = data.length
+      ? XLSX.utils.json_to_sheet(data, { header: headers })
+      : XLSX.utils.aoa_to_sheet([headers]);
+    const baseName = `missing-guesses-${count}games-${new Date().toISOString().slice(0, 10)}`;
+
+    if (format === 'csv') {
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.csv"`);
+      return res.send('﻿' + csv); // BOM כדי ש-Excel יציג עברית כראוי
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MissingGuesses');
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
+    return res.send(buf);
+  } catch (e) {
+    console.error('admin/users/export-missing:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
 // ייבוא משתמשים מ-CSV/XLSX
 router.post('/users/import', upload.single('file'), async (req, res) => {
   try {
