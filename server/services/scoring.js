@@ -399,6 +399,22 @@ function pushBadge(r, badgeId, cfg) {
   if (def && def.enabled) r.badges.push({ id: badgeId, emoji: def.emoji });
 }
 
+// מקצה תג למחזיק יחיד בלבד: הראשון (לפי סדר הדירוג שכבר ממוין) בעל הערך המקסימלי.
+// שובר-שוויון דטרמיניסטי — אין שני זוכים גם אם יש תיקו בערך.
+function assignSingleTopBadge(rows, valueFn, badgeId, cfg, { min = 1, eligibleFn = null } = {}) {
+  const def = cfg.badges[badgeId];
+  if (!def || !def.enabled) return;
+  let best = -Infinity;
+  for (const r of rows) {
+    if (eligibleFn && !eligibleFn(r)) continue;
+    const v = valueFn(r);
+    if (v > best) best = v;
+  }
+  if (best < min) return;
+  const winner = rows.find(r => (!eligibleFn || eligibleFn(r)) && valueFn(r) === best);
+  if (winner) winner.badges.push({ id: badgeId, emoji: def.emoji });
+}
+
 async function assignLeaderboardBadges(rows) {
   const cfg = await loadBadgeConfig();
   const minPreds = Number(cfg.thresholds.min_predictions) || 5;
@@ -419,8 +435,8 @@ async function assignLeaderboardBadges(rows) {
 
   const enoughPreds = (r) => r.num_predictions >= minPreds;
 
-  // תגי-על (מחזיק יחיד / שוברי-שוויון) — מתחלפים עם שינוי הנתונים
-  assignTopBadge(eligibleRows, r => r.exact_hits,      'crown',         cfg, { min: 1 });
+  // "מלך הניחושים" (crown) — זוכה יחיד בלבד (הכי הרבה ניחושים מדויקים, שובר-שוויון לפי הדירוג)
+  assignSingleTopBadge(eligibleRows, r => r.exact_hits, 'crown',        cfg, { min: 1 });
   assignTopBadge(eligibleRows, r => r.outcome_hits,    'oracle',        cfg, { min: 1 });
   assignTopBadge(eligibleRows, r => r.gd_hits,         'goal_machine',  cfg, { min: 1 });
   assignTopBadge(eligibleRows, r => r.num_predictions, 'dedicated',     cfg, { min: 1 });
@@ -428,9 +444,12 @@ async function assignLeaderboardBadges(rows) {
   assignTopBadge(eligibleRows, r => r.accuracy,        'sharpshooter',  cfg, { min: 0.0001, eligibleFn: enoughPreds });
   assignTopBadge(eligibleRows, r => r.exact_ratio,     'perfectionist', cfg, { min: 0.0001, eligibleFn: enoughPreds });
 
+  // "המוביל" (leader) — זוכה יחיד בלבד: המדורג ראשון (הניקוד הגבוה ביותר) מעל הסף
+  const leaderRow = eligibleRows.find(r => r.rank === 1 && r.total_points > 0);
+  if (leaderRow) pushBadge(leaderRow, 'leader', cfg);
+
   // תגי-סף (כל מי שעומד בתנאי) — גם הם רק למעל הסף
   for (const r of eligibleRows) {
-    if (r.rank === 1 && r.total_points > 0) pushBadge(r, 'leader', cfg);
     if (r.total_points >= centurionPts) pushBadge(r, 'centurion', cfg);
     if (r.bonus_points > 0) pushBadge(r, 'prophet', cfg);
   }

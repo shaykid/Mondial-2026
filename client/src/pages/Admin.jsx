@@ -1821,7 +1821,7 @@ function MessagesTab() {
 
       <SettingsCard title="דוח יומי — טבלת המצטיינים">
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          מדי יום ב-08:00 (שעון ישראל) נשלחת אוטומטית תמונת טבלת המצטיינים אל "מנהלת שליחות"
+          מדי יום ב-06:00 (שעון ישראל) נשלחת אוטומטית תמונת טבלת המצטיינים אל "מנהלת שליחות"
           (כתובת המנהל/ת בהגדרות SMTP). ניתן לשלוח דוגמה עכשיו:
         </p>
         <button className="btn btn-sm btn-gold" onClick={sendLeaderboardReport} disabled={reportBusy}>
