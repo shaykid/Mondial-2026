@@ -45,8 +45,21 @@ app.get('/api/health', async (req, res) => {
 // הגשת ה-build של הלקוח אם קיים
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  app.use(express.static(clientDist, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        // index.html לעולם לא נשמר במטמון — כך שאחרי deploy הדפדפן מקבל את ה-bundle העדכני
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        // נכסים עם hash בשם — מותר לאחסון ארוך-טווח
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+  app.get(/^\/(?!api).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
 }
 
 // ─────────── תזמון עדכון תוצאות ───────────
