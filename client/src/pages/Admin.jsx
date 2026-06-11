@@ -969,6 +969,7 @@ function MissingGuessesTab() {
   const [actDept, setActDept] = useState('all');
   const [actMin, setActMin] = useState('');
   const [actMax, setActMax] = useState('');
+  const [actPct, setActPct] = useState('');
   const [exportingAct, setExportingAct] = useState(null);
 
   useEffect(() => {
@@ -1016,6 +1017,7 @@ function MissingGuessesTab() {
       const params = new URLSearchParams({ format, department: actDept });
       if (actMin !== '') params.set('min', actMin);
       if (actMax !== '') params.set('max', actMax);
+      if (actPct !== '') params.set('min_correct_pct', actPct);
       const { data } = await api.get(
         `/admin/users/export-by-activity?${params.toString()}`,
         { responseType: 'blob' }
@@ -1067,8 +1069,9 @@ function MissingGuessesTab() {
 
       <SettingsCard title="ייצוא: לפי מחלקה וכמות ניחושים">
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          קובץ Excel עם שם, טלפון ומחלקה של משתמשים ממחלקה נבחרת, לפי כמות הניחושים
-          שהוזנו (יותר מ-X, פחות מ-Y). השאר ריק כדי לא להגביל גבול.
+          קובץ Excel (כולל נקודות ומיקום) של משתמשים ממחלקה נבחרת, לפי כמות הניחושים
+          שהוזנו (יותר מ-X, פחות מ-Y) ולפי אחוז הניחושים הנכונים מבין המשחקים ששוחקו
+          (יותר מ-X%). השאר ריק כדי לא להגביל.
         </p>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
           <div className="field" style={{ minWidth: 180 }}>
@@ -1098,6 +1101,17 @@ function MissingGuessesTab() {
               value={actMax}
               placeholder="ללא"
               onChange={(e) => setActMax(e.target.value)}
+            />
+          </div>
+          <div className="field" style={{ maxWidth: 170 }}>
+            <label>יותר מ- (X%) נכונים</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={actPct}
+              placeholder="ללא"
+              onChange={(e) => setActPct(e.target.value)}
             />
           </div>
           <button

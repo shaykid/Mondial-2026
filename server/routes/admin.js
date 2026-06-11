@@ -997,22 +997,49 @@ router.get('/users/export-by-activity', async (req, res) => {
     if (Number.isInteger(min)) { havingParts.push('cnt > ?'); havingParams.push(min); }
     if (Number.isInteger(max)) { havingParts.push('cnt < ?'); havingParams.push(max); }
 
+    // יותר מ-X% ניחושים נכונים (נקודות>0) מבין המשחקים ששוחקו (status=finished)
+    const finishedRow = await db.one("SELECT COUNT(*) AS c FROM matches WHERE status = 'finished'");
+    const finishedTotal = Number(finishedRow?.c || 0);
+    const minPct = parseFloat(req.query.min_correct_pct);
+    if (Number.isFinite(minPct)) {
+      if (finishedTotal > 0) {
+        // correct > (X/100)*finishedTotal  ⇔  correct/finishedTotal*100 > X
+        havingParts.push('correct > ?');
+        havingParams.push((minPct / 100) * finishedTotal);
+      } else {
+        havingParts.push('1 = 0'); // אין משחקים ששוחקו — אף אחד לא יכול לעבור סף אחוזים
+      }
+    }
+
     const rows = await db.query(`
-      SELECT u.name, u.phone_number, u.department,
-        (SELECT COUNT(*) FROM predictions p WHERE p.user_id = u.id) AS cnt
+      SELECT u.id, u.name, u.phone_number, u.department,
+        (SELECT COUNT(*) FROM predictions p WHERE p.user_id = u.id) AS cnt,
+        (SELECT COUNT(*) FROM predictions p
+           JOIN matches m ON m.id = p.match_id
+           WHERE p.user_id = u.id AND m.status = 'finished' AND p.points > 0) AS correct
       FROM users u
       WHERE ${whereParts.join(' AND ')}
       ${havingParts.length ? 'HAVING ' + havingParts.join(' AND ') : ''}
       ORDER BY u.name ASC
     `, [...whereParams, ...havingParams]);
 
-    const data = rows.map((r) => ({
-      'שם': r.name || '',
-      'טלפון': r.phone_number || '',
-      'מחלקה': r.department || '',
-      'מספר ניחושים': r.cnt
-    }));
-    const headers = ['שם', 'טלפון', 'מחלקה', 'מספר ניחושים'];
+    // נקודות ומיקום נוכחי מתוך טבלת הדירוג
+    const board = await leaderboard();
+    const byId = new Map(board.map((b) => [b.id, b]));
+    const data = rows.map((r) => {
+      const lb = byId.get(r.id);
+      return {
+        'שם': r.name || '',
+        'טלפון': r.phone_number || '',
+        'מחלקה': r.department || '',
+        'מספר ניחושים': r.cnt,
+        'נכונים': r.correct,
+        '% נכונים': finishedTotal > 0 ? Math.round((Number(r.correct) / finishedTotal) * 100) : 0,
+        'מספר נקודות': lb ? lb.total_points : 0,
+        'מיקום נוכחי': lb ? lb.rank : ''
+      };
+    });
+    const headers = ['שם', 'טלפון', 'מחלקה', 'מספר ניחושים', 'נכונים', '% נכונים', 'מספר נקודות', 'מיקום נוכחי'];
     const ws = data.length
       ? XLSX.utils.json_to_sheet(data, { header: headers })
       : XLSX.utils.aoa_to_sheet([headers]);
