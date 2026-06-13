@@ -30,6 +30,22 @@ async function ensureWritableUploadDir(candidates) {
   throw lastError || new Error('no writable upload directory');
 }
 
+// ───────── גרסת ה-build הנוכחית (לזיהוי גרסה חדשה בצד הלקוח) ─────────
+// מחזיר את build id מתוך dist/version.json שנכתב בכל בנייה. לעולם לא נשמר במטמון.
+const VERSION_FILE = path.join(__dirname, '..', '..', 'client', 'dist', 'version.json');
+router.get('/version', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  fs.readFile(VERSION_FILE, 'utf8', (err, data) => {
+    if (err) return res.json({ build: null });
+    try {
+      const parsed = JSON.parse(data);
+      res.json({ build: parsed.build || null });
+    } catch {
+      res.json({ build: null });
+    }
+  });
+});
+
 // ───────── אתר שומר שבת ─────────
 // מחזיר אם כרגע שבת לפי מיקום הגולש (נגזר מאזור-הזמן שלו). זמני כניסה/יציאה מ-Hebcal.
 const shabbatCache = new Map(); // `${tz}|${YYYY-MM-DD}` → { start, end, ts }
