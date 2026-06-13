@@ -82,21 +82,33 @@ async function scrapeFromESPN() {
     const awayCode = teamCode(away.team && away.team.displayName);
     if (!homeCode || !awayCode) continue;
 
-    const hs = parseInt(home.score, 10);
-    const as = parseInt(away.score, 10);
-    if (!Number.isInteger(hs) || !Number.isInteger(as)) continue;
-
-    // state: 'pre' (not started) | 'in' (live) | 'post' (final)
-    const state = comp.status && comp.status.type && comp.status.type.state;
-    if (state === 'pre') continue;
-    const status = state === 'post' ? 'finished' : 'live';
-
+    // המשחק ב-DB לפי הצמד (ללא תלות בסטטוס — כדי לתקן גם זמן של משחק שכבר הסתיים)
     const match = await db.one(`
-      SELECT id FROM matches
-      WHERE home_code = ? AND away_code = ? AND status != 'finished'
+      SELECT id, kickoff, status FROM matches
+      WHERE home_code = ? AND away_code = ?
       ORDER BY kickoff ASC LIMIT 1
     `, [homeCode, awayCode]);
-    if (match) {
+    if (!match) continue;
+
+    // ── סנכרון זמן פתיחה מ-ESPN (מקור-אמת ללוח הזמנים) ──
+    // ev.date הוא ISO ב-UTC; ה-DB מאחסן UTC נאיבי ('YYYY-MM-DD HH:MM:SS').
+    if (ev.date) {
+      const espnMs = new Date(ev.date).getTime();
+      const dbMs = new Date(String(match.kickoff) + (String(match.kickoff).endsWith('Z') ? '' : 'Z')).getTime();
+      if (Number.isFinite(espnMs) && Math.abs(dbMs - espnMs) > 60000) {
+        const naiveUtc = new Date(ev.date).toISOString().slice(0, 19).replace('T', ' ');
+        await db.run('UPDATE matches SET kickoff = ?, updated_at = NOW() WHERE id = ?', [naiveUtc, match.id]);
+        updated.push({ id: match.id, kickoff: naiveUtc });
+      }
+    }
+
+    // ── תוצאה/סטטוס: רק למשחק שעדיין לא 'finished' ב-DB ──
+    const hs = parseInt(home.score, 10);
+    const as = parseInt(away.score, 10);
+    // state: 'pre' (not started) | 'in' (live) | 'post' (final)
+    const state = comp.status && comp.status.type && comp.status.type.state;
+    if (match.status !== 'finished' && state !== 'pre' && Number.isInteger(hs) && Number.isInteger(as)) {
+      const status = state === 'post' ? 'finished' : 'live';
       if (await updateMatchScore(match.id, hs, as, status)) {
         updated.push({ id: match.id, score: `${homeCode} ${hs}-${as} ${awayCode}`, status });
       }
