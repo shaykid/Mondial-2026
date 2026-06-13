@@ -31,7 +31,9 @@ const TEAM_NAME_VARIANTS = {
 
 function teamCode(name) {
   if (!name) return null;
+  // נרמול: הסרת סימני ניקוד (Türkiye→turkiye, Côte d'Ivoire→cote d'ivoire, Curaçao→curacao)
   const key = String(name).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ').replace(/^the /, '');
   return TEAM_NAME_VARIANTS[key] || null;
 }
