@@ -16,6 +16,7 @@ const { recalcForMatch, loadBadgeConfig, DEFAULT_BADGE_CONFIG, leaderboard } = r
 const { sendLeaderboardReport } = require('../services/leaderboard-report');
 const { seedScheduleItems } = require('../lib/schedule-items');
 const { seedFooterDocuments } = require('../lib/footer-content');
+const { normalizeId, normalizeDateTime, normalizeSpecialPopup, parseSpecialPopups, sortSpecialPopups } = require('../lib/special-popups');
 const {
   DEFAULT_DEPARTMENTS,
   departmentForDemoUser,
@@ -418,6 +419,49 @@ async function replaceFooterDocAsset(docKey, file, prevUrl) {
     type: safeExt === '.pdf' ? 'pdf' : 'image',
     name: file.originalname || storedName
   };
+}
+
+async function readSpecialPopups(tx = db) {
+  const row = await tx.one("SELECT `value` FROM settings WHERE `key` = 'special_popups'");
+  return parseSpecialPopups(row?.value, { useDefaultsWhenMissing: true });
+}
+
+async function writeSpecialPopups(tx, items) {
+  const normalized = sortSpecialPopups(
+    (items || [])
+      .map((item, index) => normalizeSpecialPopup(item, index))
+      .filter((item) => item.id && item.start_at && item.end_at)
+  );
+  await tx.run(
+    'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
+    ['special_popups', JSON.stringify(normalized)]
+  );
+  return normalized;
+}
+
+async function replaceSpecialPopupImage(popupId, file, prevUrl) {
+  const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
+  const safeExt = ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext) ? ext : '.png';
+  const rootDir = path.join(__dirname, '..', '..', 'data', 'special_popups');
+  await fs.promises.mkdir(rootDir, { recursive: true });
+  const storedName = `${popupId}-${Date.now()}${safeExt}`;
+  const fullPath = path.join(rootDir, storedName);
+  await fs.promises.writeFile(fullPath, file.buffer);
+  if (prevUrl) {
+    const prevName = path.basename(String(prevUrl).split('?')[0]);
+    if (prevName && prevName !== storedName && prevName.startsWith(`${popupId}-`)) {
+      await fs.promises.rm(path.join(rootDir, prevName), { force: true }).catch(() => {});
+    }
+  }
+  return `/data/special_popups/${storedName}`;
+}
+
+async function removeSpecialPopupImage(popupId, imageUrl) {
+  if (!imageUrl) return;
+  const fileName = path.basename(String(imageUrl).split('?')[0]);
+  if (!fileName || !fileName.startsWith(`${popupId}-`)) return;
+  const fullPath = path.join(__dirname, '..', '..', 'data', 'special_popups', fileName);
+  await fs.promises.rm(fullPath, { force: true }).catch(() => {});
 }
 
 // מנהל מערכת מלא (admin) ניגש להכל. מנהל-משנה (manager) מוגבל לניהול משתמשים ומשחקים בלבד.
@@ -1558,6 +1602,81 @@ router.post('/settings', async (req, res) => {
   } catch (e) {
     console.error('admin/settings/set:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.get('/special-popups', async (req, res) => {
+  try {
+    const items = await readSpecialPopups();
+    res.json({ items });
+  } catch (e) {
+    console.error('admin/special-popups/get:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.post('/special-popups', upload.single('image'), async (req, res) => {
+  try {
+    const rawId = String(req.body?.id || '').trim();
+    const title = String(req.body?.title || '').trim();
+    const startAt = normalizeDateTime(req.body?.start_at);
+    const endAt = normalizeDateTime(req.body?.end_at);
+    const enabled = String(req.body?.enabled || '1') === '1';
+    const sortOrder = Number.isFinite(Number(req.body?.sort_order)) ? Number(req.body.sort_order) : 0;
+    const popupId = normalizeId(rawId, `special-popup-${Date.now()}`);
+
+    if (!startAt || !endAt) {
+      return res.status(400).json({ error: 'יש להזין תאריך התחלה ותאריך סיום' });
+    }
+
+    const items = await readSpecialPopups();
+    const existingIndex = items.findIndex((item) => item.id === popupId);
+    const existing = existingIndex >= 0 ? items[existingIndex] : null;
+    let imageUrl = existing?.image_url || '';
+    if (req.file) imageUrl = await replaceSpecialPopupImage(popupId, req.file, existing?.image_url);
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'יש להעלות תמונה לפופאפ' });
+    }
+
+    const nextItem = normalizeSpecialPopup({
+      id: popupId,
+      title,
+      image_url: imageUrl,
+      start_at: startAt,
+      end_at: endAt,
+      enabled,
+      sort_order: sortOrder
+    }, existingIndex >= 0 ? existingIndex : items.length);
+
+    const nextItems = [...items];
+    if (existingIndex >= 0) nextItems[existingIndex] = nextItem;
+    else nextItems.push(nextItem);
+
+    const saved = await db.tx(async (t) => writeSpecialPopups(t, nextItems));
+    const item = saved.find((entry) => entry.id === popupId) || nextItem;
+    res.json({ ok: true, item, items: saved });
+  } catch (e) {
+    console.error('admin/special-popups/save:', e);
+    res.status(500).json({ error: 'שמירת פופאפ נכשלה' });
+  }
+});
+
+router.delete('/special-popups/:id', async (req, res) => {
+  try {
+    const popupId = normalizeId(req.params.id);
+    if (!popupId) return res.status(400).json({ error: 'פופאפ לא תקין' });
+
+    const items = await readSpecialPopups();
+    const existing = items.find((item) => item.id === popupId);
+    if (!existing) return res.status(404).json({ error: 'פופאפ לא נמצא' });
+
+    const nextItems = items.filter((item) => item.id !== popupId);
+    const saved = await db.tx(async (t) => writeSpecialPopups(t, nextItems));
+    await removeSpecialPopupImage(popupId, existing.image_url);
+    res.json({ ok: true, items: saved });
+  } catch (e) {
+    console.error('admin/special-popups/delete:', e);
+    res.status(500).json({ error: 'מחיקת פופאפ נכשלה' });
   }
 });
 

@@ -608,6 +608,25 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   width: min(760px, 96vw);
 }
 
+.login-announcement-modal {
+  width: min(760px, 96vw);
+  padding-top: 12px;
+}
+
+.login-announcement-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.login-announcement-image {
+  width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  background: var(--paper-dim);
+}
+
 .user-chip {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 14px;

@@ -9,6 +9,7 @@ const { coordsForTimezone } = require('../data/timezones');
 const { seedFooterDocuments } = require('../lib/footer-content');
 const { seedTranslations, normalizeLanguage, SUPPORTED_LANGUAGES } = require('../lib/translations');
 const { getActiveTheme, getThemeNameOverrides } = require('../lib/themes');
+const { parseSpecialPopups } = require('../lib/special-popups');
 
 const router = express.Router();
 const upload = multer({
@@ -175,6 +176,17 @@ router.get('/scoring', auth(false), async (req, res) => {
     });
   } catch (e) {
     console.error('site/scoring:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.get('/special-popups', auth(false), async (req, res) => {
+  try {
+    const row = await db.one("SELECT `value` FROM settings WHERE `key` = 'special_popups'");
+    const items = parseSpecialPopups(row?.value, { useDefaultsWhenMissing: true });
+    res.json(items);
+  } catch (e) {
+    console.error('site/special-popups:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });

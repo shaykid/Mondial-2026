@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import NewsTicker from './components/NewsTicker';
+import LoginAnnouncementPopup from './components/LoginAnnouncementPopup';
 import SchedulePopupManager from './components/SchedulePopupManager';
 import SiteFooter from './components/SiteFooter';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -24,6 +25,7 @@ export default function App() {
         <Header />
         <NewsTicker />
       </div>
+      <LoginAnnouncementPopup />
       <SchedulePopupManager />
       <Routes>
         <Route path="/login" element={<Login />} />

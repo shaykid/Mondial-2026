@@ -1178,16 +1178,20 @@ function SettingsTab() {
   const [draft, setDraft]       = useState({});
   const [footerDocs, setFooterDocs] = useState([]);
   const [footerDrafts, setFooterDrafts] = useState({});
+  const [specialPopups, setSpecialPopups] = useState([]);
   const [savingDocKey, setSavingDocKey] = useState(null);
+  const [savingPopupId, setSavingPopupId] = useState(null);
+  const [deletingPopupId, setDeletingPopupId] = useState(null);
   const [err, setErr] = useState('');
   const [ok, setOk]   = useState('');
 
   useEffect(() => {
     Promise.all([
       api.get('/admin/settings'),
-      api.get('/admin/footer-docs')
+      api.get('/admin/footer-docs'),
+      api.get('/admin/special-popups')
     ])
-      .then(([settingsRes, footerRes]) => {
+      .then(([settingsRes, footerRes, popupsRes]) => {
         setSettings(settingsRes.data);
         setDraft(settingsRes.data);
         const docs = footerRes.data.docs || [];
@@ -1199,6 +1203,11 @@ function SettingsTab() {
           file_name: doc.file_name || '',
           file_type: doc.file_type || 'pdf'
         }])));
+        setSpecialPopups((popupsRes.data?.items || []).map((item) => ({
+          ...item,
+          image_file: null,
+          _local: false
+        })));
       })
       .catch(e => setErr(errMsg(e)));
   }, []);
@@ -1246,6 +1255,79 @@ function SettingsTab() {
       setErr(errMsg(e));
     } finally {
       setSavingDocKey(null);
+    }
+  };
+
+  const updPopup = (id, key, value) => {
+    setSpecialPopups((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item));
+  };
+
+  const addPopup = () => {
+    const ts = Date.now();
+    setSpecialPopups((items) => [
+      ...items,
+      {
+        id: `special-popup-${ts}`,
+        title: '',
+        image_url: '',
+        image_file: null,
+        start_at: '',
+        end_at: '',
+        enabled: true,
+        sort_order: items.length * 10 + 10,
+        _local: true
+      }
+    ]);
+  };
+
+  const savePopup = async (popup) => {
+    setSavingPopupId(popup.id);
+    setErr('');
+    setOk('');
+    try {
+      const form = new FormData();
+      form.append('id', popup.id);
+      form.append('title', popup.title || '');
+      form.append('start_at', popup.start_at || '');
+      form.append('end_at', popup.end_at || '');
+      form.append('enabled', popup.enabled ? '1' : '0');
+      form.append('sort_order', String(popup.sort_order ?? 0));
+      if (popup.image_file) form.append('image', popup.image_file);
+      const { data } = await api.post('/admin/special-popups', form);
+      setSpecialPopups((items) => (data.items || []).map((item) => ({
+        ...item,
+        image_file: null,
+        _local: false
+      })));
+      setOk(`פופאפ "${data.item?.title || data.item?.id}" נשמר`);
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setSavingPopupId(null);
+    }
+  };
+
+  const deletePopup = async (popupId) => {
+    const popup = specialPopups.find((item) => item.id === popupId);
+    if (popup?._local) {
+      setSpecialPopups((items) => items.filter((item) => item.id !== popupId));
+      return;
+    }
+    setDeletingPopupId(popupId);
+    setErr('');
+    setOk('');
+    try {
+      const { data } = await api.delete(`/admin/special-popups/${popupId}`);
+      setSpecialPopups((data.items || []).map((item) => ({
+        ...item,
+        image_file: null,
+        _local: false
+      })));
+      setOk('הפופאפ נמחק');
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setDeletingPopupId(null);
     }
   };
 
@@ -1526,6 +1608,82 @@ function SettingsTab() {
             );
           })}
         </div>
+      </SettingsCard>
+
+      <SettingsCard title="פופאפים מיוחדים">
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          כל פופאפ פעיל יוצג פעם אחת לכל משתמש בזמן טווח התאריכים שלו. כדי להציג שוב הודעה באותו עיצוב בתאריך אחר, יוצרים פופאפ נוסף עם טווח נפרד.
+        </p>
+        <div style={{ display: 'grid', gap: 16 }}>
+          {specialPopups.map((popup) => (
+            <div key={popup.id} style={{ border: '1px solid var(--line)', padding: 16, borderRadius: 6 }}>
+              <div className="admin-form-grid">
+                <div className="field">
+                  <label>מזהה</label>
+                  <input type="text" value={popup.id} disabled />
+                </div>
+                <div className="field">
+                  <label>כותרת</label>
+                  <input type="text" value={popup.title || ''} onChange={(e) => updPopup(popup.id, 'title', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>מיון</label>
+                  <input
+                    type="number"
+                    value={popup.sort_order ?? 0}
+                    onChange={(e) => updPopup(popup.id, 'sort_order', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>מתאריך</label>
+                  <input
+                    type="datetime-local"
+                    value={String(popup.start_at || '').slice(0, 16)}
+                    onChange={(e) => updPopup(popup.id, 'start_at', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>עד תאריך</label>
+                  <input
+                    type="datetime-local"
+                    value={String(popup.end_at || '').slice(0, 16)}
+                    onChange={(e) => updPopup(popup.id, 'end_at', e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 28 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!popup.enabled}
+                      onChange={(e) => updPopup(popup.id, 'enabled', e.target.checked)}
+                    />
+                    <span>פעיל</span>
+                  </label>
+                </div>
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>תמונה</label>
+                  {popup.image_url ? (
+                    <img src={popup.image_url} alt={popup.title || popup.id} className="schedule-admin-preview" />
+                  ) : (
+                    <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 8 }}>אין תמונה כרגע</div>
+                  )}
+                  <input type="file" accept="image/*" onChange={(e) => updPopup(popup.id, 'image_file', e.target.files?.[0] || null)} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-gold" onClick={() => savePopup(popup)} disabled={savingPopupId === popup.id}>
+                  {savingPopupId === popup.id ? 'שומר...' : 'שמור פופאפ'}
+                </button>
+                <button className="btn btn-sm btn-outline" onClick={() => deletePopup(popup.id)} disabled={deletingPopupId === popup.id}>
+                  {deletingPopupId === popup.id ? 'מוחק...' : 'מחק'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-sm btn-outline" onClick={addPopup} style={{ marginTop: 16 }}>
+          הוסף פופאפ
+        </button>
       </SettingsCard>
 
       <button
