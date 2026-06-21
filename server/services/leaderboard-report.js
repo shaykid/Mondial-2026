@@ -12,6 +12,21 @@ const { getShabbatState } = require('../lib/shabbat');
 
 const TEXT_FONT_STACK = 'Noto Sans Hebrew, DejaVu Sans, Liberation Sans, sans-serif';
 const LEADERBOARD_REPORT_LIMIT = 10;
+const HEADER_LOGO_PATH = path.join(__dirname, '..', '..', 'resources', 'themes', 'seach', 'logo-header.png');
+const BADGE_EMOJI_SVG_CODES = {
+  crown: '1f451',
+  leader: '1f3c6',
+  oracle: '1f9e0',
+  goal_machine: '26bd',
+  sharpshooter: '1f3af',
+  streak: '1f525',
+  perfectionist: '1f48e',
+  dedicated: '1f985',
+  centurion: '1f4af',
+  prophet: '2b50'
+};
+const badgeEmojiSvgDataCache = new Map();
+let headerLogoDataUriCache = null;
 const USER_RESULTS_SETTING_KEYS = [
   'smtp_server', 'smtp_port', 'smtp_security', 'smtp_user', 'smtp_password',
   'smtp_manager_email', 'email_user_delivery_mode', 'gmail_app_user', 'gmail_app_password',
@@ -33,7 +48,6 @@ const BADGE_META = {
   centurion:     { emoji: '💯', name: 'מועדון ה-100', desc: '100 נקודות ומעלה' },
   prophet:       { emoji: '⭐', name: 'הנביא', desc: 'ניחוש מיוחד נכון (אלופה / סגן / מלך שערים)' }
 };
-
 function xmlEscape(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -131,14 +145,23 @@ function normalizeBadgeList(badges) {
   return BADGE_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id));
 }
 
-function badgeSvgText(badges) {
-  const ordered = normalizeBadgeList(badges);
-  if (!ordered.length) return '—';
-  return ordered.map((b) => {
-    const meta = BADGE_META[b.id] || {};
-    const label = meta.name || b.id;
-    return `${b.emoji || ''} ${label}`.trim();
-  }).join('  ·  ');
+function badgeEmojiSvgDataUri(badgeId) {
+  const code = BADGE_EMOJI_SVG_CODES[badgeId];
+  if (!code) return null;
+  if (!badgeEmojiSvgDataCache.has(code)) {
+    const file = path.join(__dirname, '..', 'assets', 'twemoji', `${code}.svg`);
+    const svg = fs.readFileSync(file, 'utf8');
+    badgeEmojiSvgDataCache.set(code, `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+  }
+  return badgeEmojiSvgDataCache.get(code);
+}
+
+function headerLogoDataUri() {
+  if (headerLogoDataUriCache) return headerLogoDataUriCache;
+  if (!fs.existsSync(HEADER_LOGO_PATH)) return null;
+  const file = fs.readFileSync(HEADER_LOGO_PATH);
+  headerLogoDataUriCache = `data:image/png;base64,${file.toString('base64')}`;
+  return headerLogoDataUriCache;
 }
 
 function badgeHtmlPills(badges) {
@@ -148,6 +171,22 @@ function badgeHtmlPills(badges) {
     const meta = BADGE_META[b.id] || {};
     const title = `${meta.name || b.id}${meta.desc ? ` — ${meta.desc}` : ''}`;
     return `<span title="${xmlEscape(title)}" style="display:inline-block;margin:0 3px 4px 0;padding:2px 6px;border-radius:999px;background:#ffffff14;border:1px solid #2d6e3e;font-size:15px;line-height:1">${xmlEscape(b.emoji)}</span>`;
+  }).join('');
+}
+
+function badgeSvgImages(badges, rowTop, rowHeight, rightEdge) {
+  const ordered = normalizeBadgeList(badges);
+  if (!ordered.length) return '';
+  const size = 22;
+  const gap = 4;
+  const totalWidth = ordered.length * size + Math.max(ordered.length - 1, 0) * gap;
+  const startX = rightEdge - totalWidth;
+  const y = rowTop + Math.round((rowHeight - size) / 2);
+  return ordered.map((badge, index) => {
+    const href = badgeEmojiSvgDataUri(badge.id);
+    if (!href) return '';
+    const x = startX + index * (size + gap);
+    return `<image href="${href}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet" />`;
   }).join('');
 }
 
@@ -208,14 +247,16 @@ function buildLeaderboardSvg(rows, dateLabel, limit) {
   const X_PTS = 430;    // נקודות
   const X_EXACT = 270;  // ניחושים מדויקים
   const X_PRED = 120;   // סה״כ ניחושים
-  const NAME_CLIP_LEFT = 645;
-  const NAME_CLIP_WIDTH = 345;
 
   const parts = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
   parts.push(`<rect width="${W}" height="${H}" fill="#0b3d2e"/>`);
   parts.push(`<rect x="0" y="0" width="${W}" height="96" fill="#08311f"/>`);
-  parts.push(`<text x="28" y="28" font-family="${TEXT_FONT_STACK}" font-size="16" fill="#cfe8d8" text-anchor="start">בס"ד</text>`);
+  const logoDataUri = headerLogoDataUri();
+  if (logoDataUri) {
+    parts.push(`<image href="${logoDataUri}" x="${Math.round(W / 2 - 195)}" y="-3" width="390" height="141" preserveAspectRatio="xMidYMid meet" />`);
+  }
+  parts.push(`<text x="28" y="28" font-family="${TEXT_FONT_STACK}" font-size="16" fill="#cfe8d8" text-anchor="start">בס״ד</text>`);
   parts.push(`<text x="${W - 30}" y="50" font-family="${TEXT_FONT_STACK}" font-size="34" font-weight="bold" fill="#ffd700" text-anchor="end">טבלת המצטיינים</text>`);
   parts.push(`<text x="${W - 30}" y="80" font-family="${TEXT_FONT_STACK}" font-size="18" fill="#cfe8d8" text-anchor="end">מונדיאל 2026 · ${xmlEscape(dateLabel)}</text>`);
 
@@ -230,14 +271,22 @@ function buildLeaderboardSvg(rows, dateLabel, limit) {
   parts.push(`<line x1="20" y1="${hy + 12}" x2="${W - 20}" y2="${hy + 12}" stroke="#2d6e3e" stroke-width="2"/>`);
 
   top.forEach((r, i) => {
-    const cy = headTop + rowH * (i + 1) + rowH / 2;
+    const rowTop = headTop + rowH * (i + 1);
+    const cy = rowTop + rowH / 2;
+    const badges = normalizeBadgeList(r.badges);
+    const badgeSize = 22;
+    const badgeGap = 4;
+    const badgeWidth = badges.length ? badges.length * badgeSize + Math.max(badges.length - 1, 0) * badgeGap : 0;
+    const badgeRightEdge = X_BADGES;
+    const badgeLeftEdge = badgeRightEdge - badgeWidth;
+    const nameClipLeft = Math.max(20, badgeLeftEdge - 16);
     const clipId = `name-clip-${i}`;
-    if (i % 2 === 0) parts.push(`<rect x="14" y="${cy}" width="${W - 28}" height="${rowH}" fill="#ffffff10"/>`);
-    parts.push(`<clipPath id="${clipId}"><rect x="${NAME_CLIP_LEFT}" y="${cy - rowH / 2}" width="${NAME_CLIP_WIDTH}" height="${rowH}" /></clipPath>`);
+    if (i % 2 === 0) parts.push(`<rect x="14" y="${rowTop}" width="${W - 28}" height="${rowH}" fill="#ffffff10"/>`);
+    parts.push(`<clipPath id="${clipId}"><rect x="${nameClipLeft}" y="${rowTop}" width="${X_NAME - nameClipLeft + 8}" height="${rowH}" /></clipPath>`);
     const rankColor = r.rank === 1 ? '#ffd700' : r.rank === 2 ? '#c0c0c0' : r.rank === 3 ? '#cd7f32' : '#ffffff';
     parts.push(`<text x="${X_RANK}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="22" font-weight="bold" fill="${rankColor}" text-anchor="middle" dominant-baseline="middle">${r.rank}</text>`);
     parts.push(`<text x="${X_NAME}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="20" fill="#ffffff" text-anchor="end" dominant-baseline="middle" clip-path="url(#${clipId})">${xmlEscape(r.name)}</text>`);
-    parts.push(`<text x="${X_BADGES}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="14" fill="#d8f7df" text-anchor="end" dominant-baseline="middle">${xmlEscape(badgeSvgText(r.badges))}</text>`);
+    parts.push(badgeSvgImages(badges, rowTop, rowH, badgeRightEdge));
     parts.push(`<text x="${X_PTS}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="22" font-weight="bold" fill="#7CFC9A" text-anchor="middle" dominant-baseline="middle">${r.total_points}</text>`);
     parts.push(`<text x="${X_EXACT}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="20" fill="#cfe8d8" text-anchor="middle" dominant-baseline="middle">${r.exact_hits}</text>`);
     parts.push(`<text x="${X_PRED}" y="${cy}" font-family="${TEXT_FONT_STACK}" font-size="20" fill="#cfe8d8" text-anchor="middle" dominant-baseline="middle">${r.num_predictions}</text>`);
