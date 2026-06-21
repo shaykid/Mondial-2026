@@ -1,15 +1,14 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const multer = require('multer');
 const db = require('../db');
 const { auth } = require('../middleware/auth');
-const { coordsForTimezone } = require('../data/timezones');
 const { seedFooterDocuments } = require('../lib/footer-content');
 const { seedTranslations, normalizeLanguage, SUPPORTED_LANGUAGES } = require('../lib/translations');
 const { getActiveTheme, getThemeNameOverrides } = require('../lib/themes');
 const { parseSpecialPopups } = require('../lib/special-popups');
+const { getShabbatState } = require('../lib/shabbat');
 
 const router = express.Router();
 const upload = multer({
@@ -47,18 +46,6 @@ router.get('/version', (req, res) => {
   });
 });
 
-// ───────── אתר שומר שבת ─────────
-// מחזיר אם כרגע שבת לפי מיקום הגולש (נגזר מאזור-הזמן שלו). זמני כניסה/יציאה מ-Hebcal.
-const shabbatCache = new Map(); // `${tz}|${YYYY-MM-DD}` → { start, end, ts }
-
-function ymdInTz(tz) {
-  const s = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date()); // YYYY-MM-DD
-  const [y, m, d] = s.split('-').map(Number);
-  return { y, m, d, ymd: s };
-}
-
 router.get('/shabbat', auth(false), async (req, res) => {
   try {
     const row = await db.one("SELECT `value` FROM settings WHERE `key` = 'shabbat_mode'");
@@ -67,28 +54,8 @@ router.get('/shabbat', auth(false), async (req, res) => {
     if (!enabled) return res.json({ enabled: false, active: false });
 
     let tz = String(req.query.tz || '').trim();
-    if (!/^[A-Za-z][A-Za-z0-9_+\-]*\/[A-Za-z0-9_+\-/]+$/.test(tz)) tz = 'Asia/Jerusalem';
-
-    const { y, m, d, ymd } = ymdInTz(tz);
-    const cacheKey = `${tz}|${ymd}`;
-    let win = shabbatCache.get(cacheKey);
-    if (!win || Date.now() - win.ts > 6 * 3600 * 1000) {
-      const [lat, lng] = coordsForTimezone(tz);
-      const url = `https://www.hebcal.com/shabbat?cfg=json&latitude=${lat}&longitude=${lng}`
-        + `&tzid=${encodeURIComponent(tz)}&b=18&gy=${y}&gm=${m}&gd=${d}`;
-      const { data } = await axios.get(url, { timeout: 12000 });
-      const items = (data && data.items) || [];
-      const candles = items.find((i) => i.category === 'candles');
-      const havdalah = items.find((i) => i.category === 'havdalah');
-      win = { start: candles ? candles.date : null, end: havdalah ? havdalah.date : null, ts: Date.now() };
-      shabbatCache.set(cacheKey, win);
-    }
-
-    const now = Date.now();
-    const startMs = win.start ? Date.parse(win.start) : null;
-    const endMs = win.end ? Date.parse(win.end) : null;
-    const active = !!(startMs && endMs && now >= startMs && now <= endMs);
-    return res.json({ enabled: true, active, start: win.start, end: win.end, tz });
+    const state = await getShabbatState(tz);
+    return res.json({ enabled: true, ...state });
   } catch (e) {
     console.error('site/shabbat:', e.message);
     // אם Hebcal לא זמין — לא חוסמים את האתר

@@ -129,7 +129,10 @@ async function seed() {
     ['smtp_manager_email', process.env.SMTP_MANAGER_EMAIL || 'aviva@seach.co.il'],
     ['email_user_delivery_mode', process.env.EMAIL_USER_DELIVERY_MODE || 'smtp'],
     ['gmail_app_user',     process.env.GMAIL_APP_USER || ''],
-    ['gmail_app_password', process.env.GMAIL_APP_PASSWORD || '']
+    ['gmail_app_password', process.env.GMAIL_APP_PASSWORD || ''],
+    ['send_results_to_users', process.env.SEND_RESULTS_TO_USERS || '0'],
+    ['send_results_hour', process.env.SEND_RESULTS_HOUR || '19'],
+    ['send_results_audience', process.env.SEND_RESULTS_AUDIENCE || 'all']
   ];
   // INSERT IGNORE - אם המנהל כבר ערך הגדרה ידנית, נשמר ערכו הקיים.
   for (const [k, v] of settings) {

@@ -1332,6 +1332,7 @@ function SettingsTab() {
   };
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(draft);
+  const sendResultsEnabled = ['1', 'true', 'on', 'yes'].includes(String(draft.send_results_to_users || '').toLowerCase());
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -1558,6 +1559,45 @@ function SettingsTab() {
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
           כשבוחרים "חשבון Gmail", הודעות למשתתפים יישלחו דרך smtp.gmail.com עם כתובת ה-Gmail וסיסמת האפליקציה
           (יש להפעיל אימות דו-שלבי בחשבון Google וליצור "סיסמת אפליקציה"). דוח המנהלת ימשיך לצאת דרך SMTP של seach.co.il.
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title="שליחת תוצאות למשתמשים">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={sendResultsEnabled}
+            onChange={(e) => upd('send_results_to_users', e.target.checked ? '1' : '0')}
+          />
+          <span>שלח דוח תוצאות יומי למשתמשים</span>
+        </label>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+          אם הפעולה פעילה, השרת ישלח דוח יומי בשעה שנקבעה לפי שעון ישראל. ברירת המחדל היא 19:00.
+        </p>
+        {sendResultsEnabled && (
+          <div className="admin-form-grid" style={{ marginTop: 16 }}>
+            <NumField
+              label="שעת שליחה (שעון ישראל)"
+              value={draft.send_results_hour ?? 19}
+              onChange={v => upd('send_results_hour', v)}
+              min={0}
+              max={23}
+            />
+            <div className="field">
+              <label>למי לשלוח</label>
+              <select
+                value={draft.send_results_audience ?? 'all'}
+                onChange={e => upd('send_results_audience', e.target.value)}
+              >
+                <option value="all">כל המשתמשים</option>
+                <option value="guessers">כל מי שיש לו ניחושים</option>
+                <option value="top10">10 המובילים</option>
+              </select>
+            </div>
+          </div>
+        )}
+        <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
+          אם "אתר שומר שבת" פעיל, שליחת האימיילים תיעצר בזמן שבת בישראל.
         </div>
       </SettingsCard>
 
@@ -1811,13 +1851,15 @@ function SettingsCard({ title, children }) {
   );
 }
 
-function NumField({ label, value, onChange }) {
+function NumField({ label, value, onChange, min, max, step = '1' }) {
   return (
     <div className="field">
       <label>{label}</label>
       <input
         type="number"
-        step="1"
+        min={min}
+        max={max}
+        step={step}
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
       />
@@ -1933,6 +1975,7 @@ function MessagesTab() {
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
+  const [resultsBusy, setResultsBusy] = useState(false);
 
   const sendLeaderboardReport = async () => {
     setReportBusy(true); setErr(''); setOk('');
@@ -1943,6 +1986,22 @@ function MessagesTab() {
       setErr(errMsg(e));
     } finally {
       setReportBusy(false);
+    }
+  };
+
+  const sendUserResultsReport = async () => {
+    setResultsBusy(true); setErr(''); setOk('');
+    try {
+      const { data } = await api.post('/admin/user-results/send');
+      if (data?.skipped) {
+        setOk(`שליחת תוצאות למשתמשים דולגה (${data.skipped})`);
+      } else {
+        setOk(`נשלחו ${data.sent} דוחות למשתמשים (${data.failed} נכשלו)`);
+      }
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setResultsBusy(false);
     }
   };
 
@@ -2051,6 +2110,15 @@ function MessagesTab() {
         </p>
         <button className="btn btn-sm btn-gold" onClick={sendLeaderboardReport} disabled={reportBusy}>
           {reportBusy ? 'שולח...' : 'שלח דוח לדוגמה עכשיו'}
+        </button>
+      </SettingsCard>
+
+      <SettingsCard title="שליחת תוצאות למשתמשים">
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          שולח ידנית את דוח תוצאות המשתמשים לפי ההגדרות הנוכחיות, כולל שעת השליחה וקהל היעד.
+        </p>
+        <button className="btn btn-sm btn-gold" onClick={sendUserResultsReport} disabled={resultsBusy}>
+          {resultsBusy ? 'שולח...' : 'שלח תוצאות עכשיו'}
         </button>
       </SettingsCard>
 

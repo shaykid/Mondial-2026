@@ -13,7 +13,7 @@ const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { updateMatchScore, runDailyUpdate } = require('../services/scraper');
 const { recalcForMatch, loadBadgeConfig, DEFAULT_BADGE_CONFIG, leaderboard } = require('../services/scoring');
-const { sendLeaderboardReport } = require('../services/leaderboard-report');
+const { sendLeaderboardReport, sendUserResultsReport } = require('../services/leaderboard-report');
 const { seedScheduleItems } = require('../lib/schedule-items');
 const { seedFooterDocuments } = require('../lib/footer-content');
 const { normalizeId, normalizeDateTime, normalizeSpecialPopup, parseSpecialPopups, sortSpecialPopups } = require('../lib/special-popups');
@@ -1174,6 +1174,17 @@ router.post('/leaderboard-report/send', async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error('admin/leaderboard-report/send:', e);
+    res.status(500).json({ error: e.message || 'שגיאת שרת' });
+  }
+});
+
+// שליחה ידנית של דוח תוצאות למשתמשים לפי ההגדרות
+router.post('/user-results/send', async (req, res) => {
+  try {
+    const result = await sendUserResultsReport();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error('admin/user-results/send:', e);
     res.status(500).json({ error: e.message || 'שגיאת שרת' });
   }
 });

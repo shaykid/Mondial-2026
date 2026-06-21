@@ -8,7 +8,8 @@ const fs = require('fs');
 
 const db = require('./db');
 const { runDailyUpdate } = require('./services/scraper');
-const { sendLeaderboardReport } = require('./services/leaderboard-report');
+const { sendLeaderboardReport, sendUserResultsReport } = require('./services/leaderboard-report');
+const { getDatePartsInTz, getShabbatState } = require('./lib/shabbat');
 const { activeThemeAssetsDir, themeDir, DEFAULT_THEME, activeThemeName } = require('./lib/themes');
 
 const app = express();
@@ -32,6 +33,83 @@ app.use('/api/predictions',  require('./routes/predictions'));
 app.use('/api/guess-groups', require('./routes/guess-groups'));
 app.use('/api/leaderboard',  require('./routes/leaderboard'));
 app.use('/api/admin',        require('./routes/admin'));
+
+async function readSettingsMap(keys) {
+  if (!keys.length) return {};
+  const rows = await db.query(
+    `SELECT \`key\`, \`value\` FROM settings WHERE \`key\` IN (${keys.map(() => '?').join(',')})`,
+    keys
+  );
+  const map = {};
+  for (const row of rows) map[row.key] = row.value;
+  return map;
+}
+
+async function writeSetting(key, value) {
+  await db.run(
+    'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
+    [key, String(value)]
+  );
+}
+
+function isTruthySetting(value) {
+  return ['1', 'true', 'on', 'yes'].includes(String(value || '').toLowerCase());
+}
+
+async function runScheduledEmailJobs() {
+  const now = getDatePartsInTz('Asia/Jerusalem');
+  if (now.minute !== 0) return;
+
+  const settings = await readSettingsMap([
+    'shabbat_mode',
+    'leaderboard_report_last_sent_ymd',
+    'send_results_to_users',
+    'send_results_hour',
+    'results_users_last_sent_ymd'
+  ]);
+
+  if (isTruthySetting(settings.shabbat_mode)) {
+    const shabbat = await getShabbatState('Asia/Jerusalem');
+    if (shabbat.active || shabbat.error) {
+      console.log('⏸️  דוא״ל מתוזמן הושהה בגלל שבת בישראל');
+      return;
+    }
+  }
+
+  if (now.hour === 6 && settings.leaderboard_report_last_sent_ymd !== now.ymd) {
+    console.log('⏰ שליחת דוח יומי של טבלת המצטיינים...');
+    try {
+      const result = await sendLeaderboardReport();
+      if (result?.skipped) {
+        console.log(`   ↷ דוח מנהל לא נשלח (${result.skipped})`);
+      } else {
+        await writeSetting('leaderboard_report_last_sent_ymd', now.ymd);
+        console.log(`   ✓ נשלח ל-${result.to} (${result.count} משתתפים)`);
+      }
+    } catch (e) {
+      console.error('   ✗ דוח מנהל נכשל:', e.message);
+    }
+  }
+
+  if (isTruthySetting(settings.send_results_to_users)) {
+    const rawSendHour = Number(settings.send_results_hour);
+    const sendHour = Number.isInteger(rawSendHour) && rawSendHour >= 0 && rawSendHour <= 23 ? rawSendHour : 19;
+    if (now.hour === sendHour && settings.results_users_last_sent_ymd !== now.ymd) {
+      console.log('⏰ שליחת תוצאות למשתמשים...');
+      try {
+        const result = await sendUserResultsReport();
+        if (result?.skipped) {
+          console.log(`   ↷ תוצאות למשתמשים לא נשלחו (${result.skipped})`);
+        } else {
+          await writeSetting('results_users_last_sent_ymd', now.ymd);
+          console.log(`   ✓ נשלחו ${result.sent} אימיילים למשתמשים (נכשלו: ${result.failed})`);
+        }
+      } catch (e) {
+        console.error('   ✗ שליחת תוצאות למשתמשים נכשלה:', e.message);
+      }
+    }
+  }
+}
 
 // בריאות
 app.get('/api/health', async (req, res) => {
@@ -77,12 +155,9 @@ cron.schedule('0 */2 * * *', () => {
   }
 });
 
-// דוח יומי: צילום טבלת המצטיינים ושליחתו למנהלת שליחות (06:00 שעון ישראל)
-cron.schedule('0 6 * * *', () => {
-  console.log('⏰ שליחת דוח יומי של טבלת המצטיינים...');
-  sendLeaderboardReport()
-    .then((r) => console.log(`   ✓ נשלח ל-${r.to} (${r.count} משתתפים)`))
-    .catch((e) => console.error('   ✗ שליחת דוח מצטיינים נכשלה:', e.message));
+// דוחות אימייל מתוזמנים: מנהל ב-06:00 ומשתמשים בשעה שהוגדרה בהגדרות
+cron.schedule('* * * * *', () => {
+  runScheduledEmailJobs().catch((e) => console.error('   ✗ דוחות מתוזמנים נכשלו:', e.message));
 }, { timezone: 'Asia/Jerusalem' });
 
 const PORT = process.env.PORT || 4026;
