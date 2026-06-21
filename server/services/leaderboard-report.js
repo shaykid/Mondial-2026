@@ -442,6 +442,11 @@ async function sendUserResultsReport(options = {}) {
     }
   }
 
+  console.log(
+    `[user-results] sent=${sent.length} failed=${failed.length} audience=${String(s.send_results_audience || 'all').trim().toLowerCase() || 'all'} ` +
+    `mode=${userDeliveryMode} forced=${force ? 'yes' : 'no'} date=${dateLabel}`
+  );
+
   return {
     sent: sent.length,
     failed: failed.length,
