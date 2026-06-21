@@ -1976,6 +1976,41 @@ function MessagesTab() {
   const [search, setSearch] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
   const [resultsBusy, setResultsBusy] = useState(false);
+  const [resultsPreviewUrl, setResultsPreviewUrl] = useState('');
+  const [resultsPreviewBusy, setResultsPreviewBusy] = useState(false);
+  const [resultsPreviewErr, setResultsPreviewErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    let currentUrl = '';
+
+    const loadPreview = async () => {
+      setResultsPreviewBusy(true);
+      setResultsPreviewErr('');
+      try {
+        const { data } = await api.get('/admin/user-results/preview', { responseType: 'blob' });
+        currentUrl = URL.createObjectURL(data);
+        if (alive) {
+          setResultsPreviewUrl(currentUrl);
+        } else {
+          URL.revokeObjectURL(currentUrl);
+        }
+      } catch (e) {
+        if (alive) {
+          setResultsPreviewErr(errMsg(e));
+        }
+      } finally {
+        if (alive) setResultsPreviewBusy(false);
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      alive = false;
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, []);
 
   const sendLeaderboardReport = async () => {
     setReportBusy(true); setErr(''); setOk('');
@@ -2002,6 +2037,23 @@ function MessagesTab() {
       setErr(errMsg(e));
     } finally {
       setResultsBusy(false);
+    }
+  };
+
+  const refreshResultsPreview = async () => {
+    setResultsPreviewBusy(true);
+    setResultsPreviewErr('');
+    try {
+      const { data } = await api.get('/admin/user-results/preview', { responseType: 'blob' });
+      const nextUrl = URL.createObjectURL(data);
+      setResultsPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return nextUrl;
+      });
+    } catch (e) {
+      setResultsPreviewErr(errMsg(e));
+    } finally {
+      setResultsPreviewBusy(false);
     }
   };
 
@@ -2117,6 +2169,35 @@ function MessagesTab() {
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
           שולח ידנית את דוח תוצאות המשתמשים לפי ההגדרות הנוכחיות, כולל שעת השליחה וקהל היעד.
         </p>
+        <div style={{
+          border: '1px solid var(--line)',
+          borderRadius: 8,
+          padding: 14,
+          marginBottom: 14,
+          background: 'rgba(255,255,255,0.6)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+            <strong>תצוגה מקדימה של התמונה שתישלח</strong>
+            <button className="btn btn-sm btn-outline" onClick={refreshResultsPreview} disabled={resultsPreviewBusy}>
+              {resultsPreviewBusy ? 'מרענן...' : 'רענן דוגמה'}
+            </button>
+          </div>
+          {resultsPreviewErr && (
+            <div className="alert alert-error" style={{ marginBottom: 12 }}>{resultsPreviewErr}</div>
+          )}
+          {resultsPreviewUrl ? (
+            <img
+              src={resultsPreviewUrl}
+              alt="תצוגה מקדימה של דוח תוצאות למשתמשים"
+              className="schedule-admin-preview"
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            />
+          ) : (
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {resultsPreviewBusy ? 'טוען תצוגה מקדימה...' : 'אין תצוגה מקדימה זמינה כרגע'}
+            </div>
+          )}
+        </div>
         <button className="btn btn-sm btn-gold" onClick={sendUserResultsReport} disabled={resultsBusy}>
           {resultsBusy ? 'שולח...' : 'שלח תוצאות עכשיו'}
         </button>
