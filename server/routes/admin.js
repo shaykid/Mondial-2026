@@ -13,7 +13,7 @@ const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { updateMatchScore, runDailyUpdate } = require('../services/scraper');
 const { recalcForMatch, loadBadgeConfig, DEFAULT_BADGE_CONFIG, leaderboard } = require('../services/scoring');
-const { sendLeaderboardReport, sendUserResultsReport } = require('../services/leaderboard-report');
+const { renderLeaderboardPng, sendLeaderboardReport, sendUserResultsReport } = require('../services/leaderboard-report');
 const { seedScheduleItems } = require('../lib/schedule-items');
 const { seedFooterDocuments } = require('../lib/footer-content');
 const { normalizeId, normalizeDateTime, normalizeSpecialPopup, parseSpecialPopups, sortSpecialPopups } = require('../lib/special-popups');
@@ -1185,6 +1185,22 @@ router.post('/user-results/send', async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error('admin/user-results/send:', e);
+    res.status(500).json({ error: e.message || 'שגיאת שרת' });
+  }
+});
+
+// תצוגה מקדימה של התמונה שתצורף לדוח תוצאות המשתמשים
+router.get('/user-results/preview', async (req, res) => {
+  try {
+    const { png } = await renderLeaderboardPng();
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Disposition': 'inline; filename="user-results-preview.png"',
+      'Cache-Control': 'no-store'
+    });
+    return res.send(png);
+  } catch (e) {
+    console.error('admin/user-results/preview:', e);
     res.status(500).json({ error: e.message || 'שגיאת שרת' });
   }
 });
