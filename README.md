@@ -266,11 +266,12 @@ npm run client:build
 
 # הפעלה עם pm2
 npm install -g pm2
-pm2 start server/server.js --name mondial2026
+pm2 start server/server.js --name Mondial-2026
 pm2 save && pm2 startup
 ```
 
 מאחורי nginx על `mondial.example.com` → `localhost:4026`. השרת מגיש את `client/dist`.
+אחרי `git pull` על ה-VPS אפשר להריץ `npm run full_vps_deploy` או לפחות `pm2 restart Mondial-2026 --update-env`.
 
 ### Docker (לעתיד)
 שני שירותים ב-`docker-compose.yml`: `mysql:8` ו-`node` שמריץ `npm run prod`.

@@ -17,7 +17,7 @@
     "server:dev":   "npm --prefix server run dev",
     "client":       "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
-    "full_vps_deploy": "npm run install:all && npm run db:init && npm run db:seed && npm run client:build && bash -lc 'if command -v pm2 >/dev/null 2>&1; then pm2 restart \"${PM2_APP_NAME:-Mondial-2026}\"; else echo \"pm2 not installed, skipping restart\"; fi'",
+    "full_vps_deploy": "npm run install:all && npm run db:init && npm run db:seed && npm run client:build && bash -lc 'if command -v pm2 >/dev/null 2>&1; then pm2 restart Mondial-2026 --update-env; else echo \"pm2 not installed, skipping restart\"; fi'",
     "dev":          "concurrently --names \"SERVER,CLIENT\" --prefix-colors \"blue.bold,magenta.bold\" --kill-others-on-fail \"npm:server:dev\" \"npm:client\"",
     "prod":         "npm run client:build && npm run server",
     "start":        "npm run dev",
