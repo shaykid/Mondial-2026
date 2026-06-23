@@ -1,4 +1,5 @@
 import Flag from './Flag';
+import ScoreText from './ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 import { ilDate, ilTime } from '../utils/time';
 
@@ -29,9 +30,7 @@ export default function MatchCard({ match, children }) {
       <div className="match-center">
         {hasScore ? (
           <div className="match-score">
-            <span>{match.home_score}</span>
-            <span className="sep">–</span>
-            <span>{match.away_score}</span>
+            <ScoreText home={match.home_score} away={match.away_score} />
           </div>
         ) : (
           <>

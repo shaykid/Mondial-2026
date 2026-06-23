@@ -3,6 +3,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Flag from '../components/Flag';
 import MatchCard from '../components/MatchCard';
+import ScoreText from '../components/ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 
 export default function Home() {
@@ -129,8 +130,9 @@ export default function Home() {
               <MatchCard key={m.id} match={m}>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
                   {hasPrediction ? (
-                    <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14}}>
-                      {t('home.my_guess', { home: p.home_score, away: p.away_score })}
+                    <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14, display:'inline-flex', gap:6, alignItems:'baseline', flexWrap:'wrap'}}>
+                      <span>{t('home.my_guess_label')}</span>
+                      <ScoreText home={p.home_score} away={p.away_score} />
                     </span>
                   ) : (
                     <span style={{color:'var(--muted)', fontWeight:600, fontSize:14}}>
