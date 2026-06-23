@@ -1773,22 +1773,14 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       'smtp_user',
       'smtp_password',
       'site_url',
-      'smtp_manager_email',
-      'email_user_delivery_mode',
-      'gmail_app_user',
-      'gmail_app_password'
+      'smtp_manager_email'
     ]);
-    const userDeliveryMode = resolveUserDeliveryMode(smtpSettings);
     assertSmtpSettings(smtpSettings);
-    if (userDeliveryMode === 'gmail') assertGmailSettings(smtpSettings);
 
     const reportTransporter = nodemailer.createTransport(buildTransportConfig(smtpSettings));
-    const userTransporter = userDeliveryMode === 'gmail'
-      ? nodemailer.createTransport(buildGmailTransportConfig(smtpSettings))
-      : reportTransporter;
-    const userSenderEmail = userDeliveryMode === 'gmail'
-      ? String(smtpSettings.gmail_app_user || '').trim()
-      : String(smtpSettings.smtp_user || '').trim();
+    const userTransporter = reportTransporter;
+    const userSenderEmail = String(smtpSettings.smtp_user || '').trim();
+    const userSenderName = 'אתר ניחושיח - מונדיאל 2026';
     const reportSenderEmail = String(smtpSettings.smtp_user || '').trim();
 
     const filters = ['is_admin = 0', 'is_guest = 0'];
@@ -1842,7 +1834,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       department || null,
       recipients.length,
       JSON.stringify(attachmentMeta),
-      userDeliveryMode,
+      'smtp',
       userSenderEmail || null,
       String(smtpSettings.smtp_manager_email || '').trim() || null
     ]);
@@ -1877,7 +1869,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
 
       try {
         await userTransporter.sendMail({
-          from: userSenderEmail,
+          from: `"${userSenderName}" <${userSenderEmail}>`,
           to: recipient.email,
           subject,
           text: [body, ...extraLines].join('\n\n'),
@@ -1891,7 +1883,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
           WHERE campaign_id = ? AND recipient_email = ?
         `, [campaignId, recipient.email]);
       } catch (error) {
-        const friendly = friendlyMailError(error.message, userDeliveryMode);
+        const friendly = friendlyMailError(error.message, 'smtp');
         failed.push({ email: recipient.email, error: friendly });
         await db.run(`
           UPDATE email_campaign_recipients
@@ -1909,7 +1901,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
         `נשלח ל-${sent.length} משתמשים`,
         `נמענים: ${sent.join(', ') || 'אין'}`,
         includeLoginDetails ? 'נכללו פרטי התחברות: כן' : 'נכללו פרטי התחברות: לא',
-        `ספק שליחה למשתמשים: ${userDeliveryMode === 'gmail' ? 'Gmail' : 'SMTP'}`
+        'ספק שליחה למשתמשים: SMTP'
       ];
       if (failed.length) {
         summaryLines.push(`נכשלו: ${failed.length}`);
@@ -1938,7 +1930,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
         body,
         include_login_details: includeLoginDetails,
         department_filter: department || null,
-        user_delivery_mode: userDeliveryMode,
+        user_delivery_mode: 'smtp',
         sender_email: userSenderEmail,
         manager_email: managerEmail || null,
         sent_count: sent.length,
@@ -1964,7 +1956,7 @@ router.post('/send-emails', upload.array('attachments', 6), async (req, res) => 
       recipients: sent,
       failed_recipients: failed,
       campaign_id: campaignId,
-      delivery_mode: userDeliveryMode
+      delivery_mode: 'smtp'
     });
   } catch (e) {
     console.error('admin/send-emails:', e);
