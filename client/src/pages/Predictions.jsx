@@ -411,10 +411,7 @@ export default function Predictions() {
                       <span className="match-time-under">{time}</span>
                       {finished && m.home_score != null && m.away_score != null && (
                         <span className="match-final-score">
-                          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                            <span>{t('predictions.result_label')}</span>
-                            <ScoreText home={m.home_score} away={m.away_score} />
-                          </span>
+                          <span>{t('predictions.result', { home: m.home_score, away: m.away_score })}</span>
                         </span>
                       )}
                     </div>
