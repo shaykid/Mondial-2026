@@ -453,7 +453,7 @@ export default function Predictions() {
                       <div className="prediction-finished-summary">
                         <span dir="ltr" style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
                           <span>{t('home.my_guess_label')}</span>
-                          <ScoreText home={p.home} away={p.away} />
+                          <ScoreText home={p.home} away={p.away} homeRight />
                         </span>
                         <span className={`points-pill ${p.points >= 5 ? 'exact' : p.points >= 3 ? 'high' : 'zero'}`}>
                           {Number(p.points || 0)} {t('common.points')}

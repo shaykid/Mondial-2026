@@ -32,7 +32,7 @@ export default function MatchCard({ match, children }) {
       <div className="match-center">
         {hasScore ? (
           <div className="match-score">
-            <ScoreText home={match.home_score} away={match.away_score} markHome />
+            <ScoreText home={match.home_score} away={match.away_score} markHome homeRight />
           </div>
         ) : (
           <>

@@ -136,7 +136,7 @@ export default function Home() {
                       style={{color:'var(--pitch)', fontWeight:700, fontSize:14, display:'inline-flex', gap:6, alignItems:'baseline', flexWrap:'wrap'}}
                     >
                       <span>{t('home.my_guess_label')}</span>
-                      <ScoreText home={p.home_score} away={p.away_score} />
+                      <ScoreText home={p.home_score} away={p.away_score} homeRight />
                     </span>
                   ) : (
                     <span style={{color:'var(--muted)', fontWeight:600, fontSize:14}}>

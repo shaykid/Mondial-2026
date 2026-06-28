@@ -97,7 +97,7 @@ export default function Matches() {
                       <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14}}>
                         <span dir="ltr" style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
                           <span>{t('home.my_guess_label')}</span>
-                          <ScoreText home={prediction.home_score} away={prediction.away_score} />
+                          <ScoreText home={prediction.home_score} away={prediction.away_score} homeRight />
                         </span>
                       </span>
                     ) : (
