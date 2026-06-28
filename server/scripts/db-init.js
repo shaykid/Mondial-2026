@@ -125,6 +125,22 @@ async function main() {
   await addColumnIfMissing('guess_group_members', 'paid_points',
     'ALTER TABLE guess_group_members ADD COLUMN paid_points INT NOT NULL DEFAULT 0 AFTER role');
 
+  // שלבי נוקאאוט עם שמות placeholders עד שידועים זהויות הנבחרות
+  await addColumnIfMissing('matches', 'home_label_he',
+    'ALTER TABLE matches ADD COLUMN home_label_he VARCHAR(120) NULL AFTER away_code');
+  await addColumnIfMissing('matches', 'home_label_en',
+    'ALTER TABLE matches ADD COLUMN home_label_en VARCHAR(120) NULL AFTER home_label_he');
+  await addColumnIfMissing('matches', 'home_label_ar',
+    'ALTER TABLE matches ADD COLUMN home_label_ar VARCHAR(120) NULL AFTER home_label_en');
+  await addColumnIfMissing('matches', 'away_label_he',
+    'ALTER TABLE matches ADD COLUMN away_label_he VARCHAR(120) NULL AFTER home_label_ar');
+  await addColumnIfMissing('matches', 'away_label_en',
+    'ALTER TABLE matches ADD COLUMN away_label_en VARCHAR(120) NULL AFTER away_label_he');
+  await addColumnIfMissing('matches', 'away_label_ar',
+    'ALTER TABLE matches ADD COLUMN away_label_ar VARCHAR(120) NULL AFTER away_label_en');
+  await makeColumnNullable('matches', 'home_code', 'VARCHAR(10) NULL');
+  await makeColumnNullable('matches', 'away_code', 'VARCHAR(10) NULL');
+
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 
@@ -143,6 +159,22 @@ async function addColumnIfMissing(table, column, ddl) {
     await db.query(ddl);
     console.log(`   ✓ ${table}.${column}`);
   }
+}
+
+async function makeColumnNullable(table, column, ddlType) {
+  const tbl = await db.one(`
+    SELECT COUNT(*) AS n FROM information_schema.tables
+    WHERE table_schema = DATABASE() AND table_name = ?
+  `, [table]);
+  if (!tbl.n) return;
+  const col = await db.one(`
+    SELECT IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS max_len
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+  `, [table, column]);
+  if (!col || String(col.IS_NULLABLE).toUpperCase() === 'YES') return;
+  await db.query(`ALTER TABLE ${table} MODIFY COLUMN ${column} ${ddlType}`);
+  console.log(`   ✓ ${table}.${column} → NULL`);
 }
 
 main().then(() => process.exit(0)).catch(e => {

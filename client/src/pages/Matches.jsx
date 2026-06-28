@@ -4,12 +4,14 @@ import MatchCard from '../components/MatchCard';
 import ScoreText from '../components/ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 import { ilDate, ilDayKey } from '../utils/time';
+import { MATCH_STAGES } from '../lib/stages';
 
 export default function Matches() {
   const { t, locale } = useTranslation();
   const [matches, setMatches] = useState([]);
   const [myPredictions, setMyPredictions] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('all');
 
   useEffect(() => {
     Promise.all([
@@ -28,10 +30,12 @@ export default function Matches() {
 
   const groups = useMemo(() => {
     const list = matches.filter(m => {
+      if (stageFilter !== 'all' && m.stage !== stageFilter) return false;
       if (filter === 'all') return true;
       if (filter === 'finished') return m.status === 'finished';
       if (filter === 'upcoming') return m.status !== 'finished';
-      return m.group_letter === filter;
+      if (stageFilter === 'group') return m.group_letter === filter;
+      return true;
     });
     const byDay = {};
     for (const m of list) {
@@ -40,7 +44,7 @@ export default function Matches() {
       byDay[day].push(m);
     }
     return Object.entries(byDay).sort(([a],[b]) => a.localeCompare(b));
-  }, [matches, filter]);
+  }, [matches, filter, stageFilter]);
 
   const groupLetters = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
@@ -55,10 +59,24 @@ export default function Matches() {
         <button className={`tab ${filter==='all'?'active':''}`} onClick={() => setFilter('all')}>{t('matches.filter_all')}</button>
         <button className={`tab ${filter==='upcoming'?'active':''}`} onClick={() => setFilter('upcoming')}>{t('matches.filter_upcoming')}</button>
         <button className={`tab ${filter==='finished'?'active':''}`} onClick={() => setFilter('finished')}>{t('matches.filter_finished')}</button>
-        {groupLetters.map(g => (
-          <button key={g} className={`tab ${filter===g?'active':''}`} onClick={() => setFilter(g)}>{t('matches.group_prefix', { group: g })}</button>
+      </div>
+
+      <div className="tabs" style={{flexWrap:'wrap', marginTop: 12}}>
+        <button className={`tab ${stageFilter==='all'?'active':''}`} onClick={() => setStageFilter('all')}>{t('stages.all')}</button>
+        {MATCH_STAGES.map((stage) => (
+          <button key={stage.key} className={`tab ${stageFilter===stage.key?'active':''}`} onClick={() => setStageFilter(stage.key)}>
+            {t(`stages.${stage.key}`)}
+          </button>
         ))}
       </div>
+
+      {stageFilter === 'group' && (
+        <div className="tabs" style={{flexWrap:'wrap', marginTop: 12}}>
+          {groupLetters.map(g => (
+            <button key={g} className={`tab ${filter===g?'active':''}`} onClick={() => setFilter(g)}>{t('matches.group_prefix', { group: g })}</button>
+          ))}
+        </div>
+      )}
 
       {groups.map(([day, dayMatches]) => (
         <div key={day}>
@@ -77,7 +95,7 @@ export default function Matches() {
                   <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap'}}>
                     {hasPrediction ? (
                       <span style={{color:'var(--pitch)', fontWeight:700, fontSize:14}}>
-                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <span dir="ltr" style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
                           <span>{t('home.my_guess_label')}</span>
                           <ScoreText home={prediction.home_score} away={prediction.away_score} />
                         </span>

@@ -64,6 +64,53 @@ async function getModeFromSettings() {
 const ESPN_SCOREBOARD =
   'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 
+const STAGE_WINDOWS = [
+  { stage: 'group', start: '2026-06-11T00:00:00Z', end: '2026-06-27T23:59:59Z' },
+  { stage: 'round_of_32', start: '2026-06-28T00:00:00Z', end: '2026-07-03T23:59:59Z' },
+  { stage: 'round_of_16', start: '2026-07-04T00:00:00Z', end: '2026-07-07T23:59:59Z' },
+  { stage: 'quarter_final', start: '2026-07-09T00:00:00Z', end: '2026-07-11T23:59:59Z' },
+  { stage: 'semi_final', start: '2026-07-14T00:00:00Z', end: '2026-07-15T23:59:59Z' },
+  { stage: 'third_place', start: '2026-07-18T00:00:00Z', end: '2026-07-18T23:59:59Z' },
+  { stage: 'final', start: '2026-07-19T00:00:00Z', end: '2026-07-19T23:59:59Z' }
+];
+
+function detectStageFromDate(iso) {
+  const ms = new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return STAGE_WINDOWS.find(({ start, end }) => {
+    const a = new Date(start).getTime();
+    const b = new Date(end).getTime();
+    return ms >= a && ms <= b;
+  })?.stage || null;
+}
+
+function normalizeVenue(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function findFallbackMatch({ stage, kickoff, venue }) {
+  const stageName = stage || detectStageFromDate(kickoff);
+  if (!stageName) return null;
+  const rows = await db.query(`
+    SELECT id, kickoff, status, home_code, away_code, venue
+    FROM matches
+    WHERE stage = ? AND status != 'finished'
+    ORDER BY kickoff ASC, id ASC
+  `, [stageName]);
+  if (!rows.length) return null;
+  const targetMs = new Date(kickoff).getTime();
+  const venueKey = normalizeVenue(venue);
+  const withVenue = venueKey ? rows.filter((row) => normalizeVenue(row.venue).includes(venueKey) || venueKey.includes(normalizeVenue(row.venue))) : [];
+  const pool = withVenue.length ? withVenue : rows;
+  if (!Number.isFinite(targetMs)) return pool[0];
+  return pool.reduce((best, row) => {
+    if (!best) return row;
+    const bestMs = Math.abs(new Date(best.kickoff).getTime() - targetMs);
+    const rowMs = Math.abs(new Date(row.kickoff).getTime() - targetMs);
+    return rowMs < bestMs ? row : best;
+  }, null);
+}
+
 async function scrapeFromESPN() {
   // Query the full tournament window so a single run can settle any finished game.
   const url = `${ESPN_SCOREBOARD}?dates=20260611-20260719`;
@@ -82,19 +129,32 @@ async function scrapeFromESPN() {
 
     const homeCode = teamCode(home.team && home.team.displayName);
     const awayCode = teamCode(away.team && away.team.displayName);
-    if (!homeCode || !awayCode) continue;
+    const eventVenue = comp.venue && comp.venue.fullName;
+    const eventDate = ev.date || comp.date;
 
-    // המשחק ב-DB לפי הצמד בכל סדר (ESPN לעיתים מציג בית/חוץ הפוך מהזריעה).
-    // לא הופכים את בית/חוץ ב-DB (כדי לא להפוך ניחושים קיימים) — רק מתאימים את הכיוון.
-    const match = await db.one(`
-      SELECT id, kickoff, status, home_code, away_code FROM matches
-      WHERE (home_code = ? AND away_code = ?) OR (home_code = ? AND away_code = ?)
-      ORDER BY kickoff ASC LIMIT 1
-    `, [homeCode, awayCode, awayCode, homeCode]);
+    let match = null;
+    if (homeCode && awayCode) {
+      // המשחק ב-DB לפי הצמד בכל סדר (ESPN לעיתים מציג בית/חוץ הפוך מהזריעה).
+      // לא הופכים את בית/חוץ ב-DB (כדי לא להפוך ניחושים קיימים) — רק מתאימים את הכיוון.
+      match = await db.one(`
+        SELECT id, kickoff, status, home_code, away_code, stage, venue FROM matches
+        WHERE (home_code = ? AND away_code = ?) OR (home_code = ? AND away_code = ?)
+        ORDER BY kickoff ASC LIMIT 1
+      `, [homeCode, awayCode, awayCode, homeCode]);
+    }
+    if (!match) {
+      match = await findFallbackMatch({
+        stage: detectStageFromDate(eventDate),
+        kickoff: eventDate,
+        venue: eventVenue
+      });
+    }
     if (!match) continue;
 
     // האם כיוון ה-DB תואם ל-ESPN (בית=בית) או הפוך
-    const sameOrientation = match.home_code === homeCode;
+    const sameOrientation = match.home_code && homeCode && awayCode
+      ? match.home_code === homeCode
+      : true;
 
     // ── סנכרון זמן פתיחה מ-ESPN (מקור-אמת ללוח הזמנים) ──
     // ev.date הוא ISO ב-UTC; ה-DB מאחסן UTC נאיבי ('YYYY-MM-DD HH:MM:SS').
@@ -119,7 +179,9 @@ async function scrapeFromESPN() {
       const dbHome = sameOrientation ? hs : as;
       const dbAway = sameOrientation ? as : hs;
       if (await updateMatchScore(match.id, dbHome, dbAway, status)) {
-        updated.push({ id: match.id, score: `${match.home_code} ${dbHome}-${dbAway} ${match.away_code}`, status });
+        const homeLabel = match.home_code || match.home_label_en || match.home_label_he || `match-${match.id}`;
+        const awayLabel = match.away_code || match.away_label_en || match.away_label_he || `match-${match.id}`;
+        updated.push({ id: match.id, score: `${homeLabel} ${dbHome}-${dbAway} ${awayLabel}`, status });
       }
     }
   }

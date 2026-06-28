@@ -19,9 +19,15 @@ router.get('/my', auth(), async (req, res) => {
   try {
     const preds = await db.query(`
       SELECT p.*, m.home_code, m.away_code, m.kickoff, m.status,
+        m.home_label_he, m.home_label_en, m.home_label_ar,
+        m.away_label_he, m.away_label_en, m.away_label_ar,
+        th.name_he AS home_name, th.name_en AS home_name_en, th.name_ar AS home_name_ar,
+        ta.name_he AS away_name, ta.name_en AS away_name_en, ta.name_ar AS away_name_ar,
         m.home_score AS actual_home, m.away_score AS actual_away
       FROM predictions p
       JOIN matches m ON m.id = p.match_id
+      LEFT JOIN teams th ON th.code = m.home_code
+      LEFT JOIN teams ta ON ta.code = m.away_code
       WHERE p.user_id = ?
       ORDER BY m.kickoff ASC
     `, [req.user.id]);

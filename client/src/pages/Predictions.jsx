@@ -6,6 +6,8 @@ import ScoreText from '../components/ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 import { useAuth } from '../context/AuthContext';
 import { ilDate, ilTime, ilMs, ilDayKey, parseScheduleLockMs } from '../utils/time';
+import { MATCH_STAGES } from '../lib/stages';
+import { getMatchTeamName } from '../lib/match-utils';
 
 function formatDateTime(iso, locale) {
   return {
@@ -288,7 +290,7 @@ export default function Predictions() {
   // קיבוץ משחקים לפי תאריך
   const byDay = useMemo(() => {
     const groups = {};
-    const list = matches.filter(m => m.stage === 'group' || tab === 'all');
+    const list = matches.filter(m => tab === 'all' || m.stage === tab);
     for (const m of list) {
       const day = ilDayKey(m.kickoff);
       if (!groups[day]) groups[day] = [];
@@ -319,7 +321,16 @@ export default function Predictions() {
 
       <div className="predictions-toolbar">
         <div className="tabs">
-          <button className={`tab ${tab==='group'?'active':''}`} onClick={() => setTab('group')}>{t('predictions.group_stage')}</button>
+          <button className={`tab ${tab==='all'?'active':''}`} onClick={() => setTab('all')}>{t('stages.all')}</button>
+          {MATCH_STAGES.map((stage) => (
+            <button
+              key={stage.key}
+              className={`tab ${tab===stage.key?'active':''}`}
+              onClick={() => setTab(stage.key)}
+            >
+              {t(`stages.${stage.key}`)}
+            </button>
+          ))}
           <button className={`tab ${tab==='special'?'active':''}`} onClick={() => setTab('special')}>{t('predictions.special')}</button>
         </div>
         {tab === 'group' && (
@@ -378,13 +389,13 @@ export default function Predictions() {
                 const locked = Date.now() >= lockTime;
                 const finished = m.status === 'finished';
                 const { time } = formatDateTime(m.kickoff, locale);
-                const homeName = pickText(m.home_name, m.home_name_en, m.home_name_ar);
-                const awayName = pickText(m.away_name, m.away_name_en, m.away_name_ar);
+                const home = getMatchTeamName(m, 'home', pickText);
+                const away = getMatchTeamName(m, 'away', pickText);
                 return (
                   <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="ltr">
                     <div className="match-team home">
-                      <span className="name">{homeName}</span>
-                      <Flag code={m.home_code} size="sm" title={homeName} />
+                      <span className={`name ${home.placeholder ? 'placeholder' : ''}`}>{home.name}</span>
+                      <Flag code={m.home_code || ''} size="sm" title={home.name} />
                     </div>
 
                     <div className="scores-col">
@@ -416,8 +427,8 @@ export default function Predictions() {
                     </div>
 
                     <div className="match-team away">
-                      <Flag code={m.away_code} size="sm" title={awayName} />
-                      <span className="name">{awayName}</span>
+                      <Flag code={m.away_code || ''} size="sm" title={away.name} />
+                      <span className={`name ${away.placeholder ? 'placeholder' : ''}`}>{away.name}</span>
                       {p.points != null && p.points > 0 && (
                         <span className={`points-pill ${p.points >= 5 ? 'exact' : p.points >= 3 ? 'high' : ''}`}>
                           {p.points} {t('common.points')}

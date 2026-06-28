@@ -2,6 +2,7 @@ import Flag from './Flag';
 import ScoreText from './ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 import { ilDate, ilTime } from '../utils/time';
+import { getMatchTeamName } from '../lib/match-utils';
 
 // שעה/תאריך לפי שעון ישראל
 function formatDateTime(iso, locale) {
@@ -17,14 +18,14 @@ export default function MatchCard({ match, children }) {
   const finished = match.status === 'finished';
   const live = match.status === 'live';
   const hasScore = match.home_score != null && match.away_score != null;
-  const homeName = pickText(match.home_name, match.home_name_en, match.home_name_ar);
-  const awayName = pickText(match.away_name, match.away_name_en, match.away_name_ar);
+  const home = getMatchTeamName(match, 'home', pickText);
+  const away = getMatchTeamName(match, 'away', pickText);
 
   return (
-    <div className={`match-card ${finished ? 'finished' : ''} ${live ? 'live' : ''}`}>
+    <div className={`match-card ${finished ? 'finished' : ''} ${live ? 'live' : ''}`} dir="ltr">
       <div className="match-team home">
-        <span className="name">{homeName || match.home_code}</span>
-        <Flag code={match.home_code} size="md" title={homeName} />
+        <span className={`name ${home.placeholder ? 'placeholder' : ''}`}>{home.name}</span>
+        <Flag code={match.home_code || ''} size="md" title={home.name} />
       </div>
 
       <div className="match-center">
@@ -43,8 +44,8 @@ export default function MatchCard({ match, children }) {
       </div>
 
       <div className="match-team away">
-        <Flag code={match.away_code} size="md" title={awayName} />
-        <span className="name">{awayName || match.away_code}</span>
+        <Flag code={match.away_code || ''} size="md" title={away.name} />
+        <span className={`name ${away.placeholder ? 'placeholder' : ''}`}>{away.name}</span>
       </div>
 
       {match.venue && <div className="match-venue">📍 {match.venue}</div>}

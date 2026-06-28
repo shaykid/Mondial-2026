@@ -49,15 +49,42 @@ async function seed() {
   await db.tx(async (t) => {
     for (const m of matches) {
       await t.run(`
-        INSERT INTO matches (id, stage, group_letter, home_code, away_code, kickoff, venue, status)
-        VALUES (?, 'group', ?, ?, ?, ?, ?, 'scheduled')
+        INSERT INTO matches (
+          id, stage, group_letter,
+          home_code, away_code,
+          home_label_he, home_label_en, home_label_ar,
+          away_label_he, away_label_en, away_label_ar,
+          kickoff, venue, status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
         ON DUPLICATE KEY UPDATE
+          stage        = VALUES(stage),
           group_letter = VALUES(group_letter),
           home_code    = VALUES(home_code),
           away_code    = VALUES(away_code),
+          home_label_he = VALUES(home_label_he),
+          home_label_en = VALUES(home_label_en),
+          home_label_ar = VALUES(home_label_ar),
+          away_label_he = VALUES(away_label_he),
+          away_label_en = VALUES(away_label_en),
+          away_label_ar = VALUES(away_label_ar),
           kickoff      = VALUES(kickoff),
           venue        = VALUES(venue)
-      `, [m.id, m.group, m.home, m.away, isoToMysql(m.kickoff), m.venue]);
+      `, [
+        m.id,
+        m.stage || 'group',
+        m.group || null,
+        m.home || null,
+        m.away || null,
+        m.home_label?.he || null,
+        m.home_label?.en || null,
+        m.home_label?.ar || null,
+        m.away_label?.he || null,
+        m.away_label?.en || null,
+        m.away_label?.ar || null,
+        isoToMysql(m.kickoff),
+        m.venue || null
+      ]);
     }
   });
   console.log(`   ✓ ${matches.length} משחקים נטענו`);

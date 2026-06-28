@@ -8,6 +8,7 @@ import Flag from '../components/Flag';
 import { useTranslation } from '../i18n/TranslationContext';
 import { useAuth } from '../context/AuthContext';
 import { ilDate, ilDateTime } from '../utils/time';
+import { stageLabel } from '../lib/stages';
 
 export default function Admin() {
   const [tab, setTab] = useState('overview');
@@ -890,12 +891,12 @@ function MatchesTab() {
               return (
                 <tr key={m.id}>
                   <td style={{ color: 'var(--muted)' }}>{m.id}</td>
-                  <td><span className="deadline-badge" style={{ background: 'var(--ink)', color: 'var(--paper)' }}>{m.stage === 'group' ? 'בית' : m.stage}</span></td>
+                  <td><span className="deadline-badge" style={{ background: 'var(--ink)', color: 'var(--paper)' }}>{stageLabel(m.stage, 'he')}</span></td>
                   <td style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--crimson)' }}>{m.group_letter || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                      <span>{m.home_name}</span>
-                      <Flag code={m.home_code} alt={m.home_name} size="sm" />
+                      <span>{m.home_name || m.home_label_he || m.home_label_en || m.home_code || '—'}</span>
+                      <Flag code={m.home_code || ''} alt={m.home_name || m.home_label_he || m.home_label_en || m.home_code} size="sm" />
                     </div>
                   </td>
                   <td>
@@ -923,8 +924,8 @@ function MatchesTab() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Flag code={m.away_code} alt={m.away_name} size="sm" />
-                      <span>{m.away_name}</span>
+                      <Flag code={m.away_code || ''} alt={m.away_name || m.away_label_he || m.away_label_en || m.away_code} size="sm" />
+                      <span>{m.away_name || m.away_label_he || m.away_label_en || m.away_code || '—'}</span>
                     </div>
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--muted)' }}>

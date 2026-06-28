@@ -1563,26 +1563,64 @@ router.delete('/matches/:id/score', async (req, res) => {
 // הוספת/עדכון משחק (לשלבי נוקאאוט)
 router.post('/matches', async (req, res) => {
   try {
-    const { id, stage, group_letter, home_code, away_code, kickoff, venue } = req.body || {};
-    if (!home_code || !away_code || !kickoff) {
+    const {
+      id, stage, group_letter, home_code, away_code,
+      home_label_he, home_label_en, home_label_ar,
+      away_label_he, away_label_en, away_label_ar,
+      kickoff, venue
+    } = req.body || {};
+    if (!kickoff) {
       return res.status(400).json({ error: 'חסרים שדות' });
     }
     // ממיר ISO ל-DATETIME של MySQL
     const k = new Date(kickoff).toISOString().slice(0, 19).replace('T', ' ');
     if (id) {
       await db.run(`
-        UPDATE matches SET stage=?, group_letter=?, home_code=?, away_code=?, kickoff=?, venue=?
+        UPDATE matches SET stage=?, group_letter=?, home_code=?, away_code=?, home_label_he=?, home_label_en=?, home_label_ar=?, away_label_he=?, away_label_en=?, away_label_ar=?, kickoff=?, venue=?
         WHERE id=?
-      `, [stage || 'group', group_letter || null, home_code, away_code, k, venue || null, id]);
+      `, [
+        stage || 'group',
+        group_letter || null,
+        home_code || null,
+        away_code || null,
+        home_label_he || null,
+        home_label_en || null,
+        home_label_ar || null,
+        away_label_he || null,
+        away_label_en || null,
+        away_label_ar || null,
+        k,
+        venue || null,
+        id
+      ]);
       return res.json({ ok: true, id });
     }
     // לנוקאאוט - מצא ID פנוי גבוה
     const last = await db.one('SELECT COALESCE(MAX(id), 0) AS m FROM matches');
     const newId = last.m + 1;
     await db.run(`
-      INSERT INTO matches (id, stage, group_letter, home_code, away_code, kickoff, venue, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')
-    `, [newId, stage || 'knockout', group_letter || null, home_code, away_code, k, venue || null]);
+      INSERT INTO matches (
+        id, stage, group_letter, home_code, away_code,
+        home_label_he, home_label_en, home_label_ar,
+        away_label_he, away_label_en, away_label_ar,
+        kickoff, venue, status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
+    `, [
+      newId,
+      stage || 'knockout',
+      group_letter || null,
+      home_code || null,
+      away_code || null,
+      home_label_he || null,
+      home_label_en || null,
+      home_label_ar || null,
+      away_label_he || null,
+      away_label_en || null,
+      away_label_ar || null,
+      k,
+      venue || null
+    ]);
     res.json({ ok: true, id: newId });
   } catch (e) {
     console.error('admin/add-match:', e);
