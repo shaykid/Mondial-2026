@@ -84,6 +84,10 @@ function detectStageFromDate(iso) {
   })?.stage || null;
 }
 
+function getStageWindow(stage) {
+  return STAGE_WINDOWS.find((row) => row.stage === stage) || null;
+}
+
 function normalizeVenue(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -347,11 +351,37 @@ async function scrapeFromESPN() {
 async function scanAvailableFixturesFromESPN() {
   const events = await fetchESPNEvents();
   const changes = [];
+  const seenByStage = new Map();
   for (const ev of events) {
     const fixture = eventToFixture(ev);
     if (!fixture) continue;
     const change = await upsertFixture(fixture);
     if (change) changes.push(change);
+    if (!seenByStage.has(fixture.stage)) seenByStage.set(fixture.stage, new Set());
+    seenByStage.get(fixture.stage).add(change.id);
+  }
+
+  for (const [stage, seenIds] of seenByStage.entries()) {
+    const window = getStageWindow(stage);
+    const params = [stage];
+    let extraWhere = '';
+    if (window) {
+      extraWhere = ' AND kickoff BETWEEN ? AND ?';
+      params.push(window.start.replace('T', ' ').replace('Z', ''), window.end.replace('T', ' ').replace('Z', ''));
+    }
+    const rows = await db.query(`
+      SELECT id, status, kickoff
+      FROM matches
+      WHERE stage = ? AND status = 'scheduled'${extraWhere}
+      ORDER BY kickoff ASC, id ASC
+    `, params);
+    for (const row of rows) {
+      if (seenIds.has(row.id)) continue;
+      await db.run('DELETE FROM predictions WHERE match_id = ?', [row.id]);
+      await db.run('DELETE FROM guess_group_bets WHERE match_id = ?', [row.id]);
+      await db.run('DELETE FROM matches WHERE id = ?', [row.id]);
+      changes.push({ id: row.id, action: 'deleted' });
+    }
   }
   return changes;
 }

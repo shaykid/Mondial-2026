@@ -50,6 +50,14 @@ async function getSettingNum(key, def) {
   return Number.isFinite(n) ? n : def;
 }
 
+function parseUtcDate(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return value;
+  const raw = String(value).trim();
+  if (/[zZ]$/.test(raw) || /[+-]\d{2}:?\d{2}$/.test(raw)) return new Date(raw);
+  return new Date(`${raw.replace(' ', 'T')}Z`);
+}
+
 // טוען את כל הגבולות מההגדרות (עם נפילה לברירות המחדל)
 async function loadCaps() {
   return {
@@ -68,7 +76,7 @@ function clampCost(v, max) {
 async function isMatchLocked(match) {
   const lockHours = Number(await getSetting('lock_hours_before', 1));
   const raw = String(match.kickoff);
-  const kickoffMs = new Date(raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`).getTime();
+  const kickoffMs = parseUtcDate(raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`)?.getTime();
   const lockTime = kickoffMs - (lockHours * 60 * 60 * 1000);
   return Date.now() >= lockTime;
 }

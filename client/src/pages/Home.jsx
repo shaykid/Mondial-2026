@@ -5,6 +5,7 @@ import Flag from '../components/Flag';
 import MatchCard from '../components/MatchCard';
 import ScoreText from '../components/ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
+import { ilMs } from '../utils/time';
 
 export default function Home() {
   const { user } = useAuth();
@@ -39,7 +40,7 @@ export default function Home() {
     .slice(0, 5);
 
   const isLocked = (m) => {
-    const kickoff = new Date(m.kickoff).getTime();
+    const kickoff = ilMs(m.kickoff);
     return Date.now() >= kickoff - 3600 * 1000 || m.status === 'finished';
   };
 

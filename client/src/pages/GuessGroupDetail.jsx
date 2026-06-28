@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../i18n/TranslationContext';
 import Flag from '../components/Flag';
 import ScoreText from '../components/ScoreText';
+import { ilMs } from '../utils/time';
 
 const PICKS = [
   { value: 'home', key: 'gg.pick', label: '1' },
@@ -15,7 +16,7 @@ const PICKS = [
 function isLocked(kickoff) {
   if (!kickoff) return false;
   const raw = String(kickoff);
-  const ms = new Date(raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`).getTime();
+  const ms = ilMs(raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`);
   return Date.now() >= (ms - 60 * 60 * 1000);
 }
 
