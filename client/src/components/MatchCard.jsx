@@ -22,8 +22,9 @@ export default function MatchCard({ match, children }) {
   const away = getMatchTeamName(match, 'away', pickText);
 
   return (
-    <div className={`match-card ${finished ? 'finished' : ''} ${live ? 'live' : ''}`} dir="ltr">
+    <div className={`match-card ${finished ? 'finished' : ''} ${live ? 'live' : ''}`} dir="rtl">
       <div className="match-team home">
+        <span className="home-emoji" aria-hidden="true" title="קבוצת בית">🏠</span>
         <span className={`name ${home.placeholder ? 'placeholder' : ''}`}>{home.name}</span>
         <Flag code={match.home_code || ''} size="md" title={home.name} />
       </div>

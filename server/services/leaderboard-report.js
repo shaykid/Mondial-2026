@@ -461,5 +461,14 @@ module.exports = {
   renderLeaderboardPng,
   sendLeaderboardReport,
   sendUserResultsReport,
-  buildLeaderboardSvg
+  buildLeaderboardSvg,
+  // עזרים משותפים לשליחת דוא״ל (בשימוש גם ב-prediction-reminders)
+  readSettingsMap,
+  isTruthySetting,
+  buildTransportConfig,
+  buildGmailTransportConfig,
+  resolveUserDeliveryMode,
+  assertSmtpSettings,
+  assertGmailSettings,
+  friendlyMailError
 };

@@ -396,8 +396,9 @@ export default function Predictions() {
                 const home = getMatchTeamName(m, 'home', pickText);
                 const away = getMatchTeamName(m, 'away', pickText);
                 return (
-                  <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="ltr">
+                  <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="rtl">
                     <div className="match-team home">
+                      <span className="home-emoji" aria-hidden="true" title="קבוצת בית">🏠</span>
                       <span className={`name ${home.placeholder ? 'placeholder' : ''}`}>{home.name}</span>
                       <Flag code={m.home_code || ''} size="sm" title={home.name} />
                     </div>
@@ -408,7 +409,7 @@ export default function Predictions() {
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          className={`score-input ${scoreTone('home', p.home, p.away)}`}
+                          className={`score-input home-score ${scoreTone('home', p.home, p.away)}`}
                           value={p.home ?? ''}
                           disabled={locked || finished}
                           onChange={e => onChange(m.id, 'home', e.target.value)}

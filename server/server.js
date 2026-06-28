@@ -9,6 +9,7 @@ const fs = require('fs');
 const db = require('./db');
 const { runDailyUpdate } = require('./services/scraper');
 const { sendLeaderboardReport, sendUserResultsReport } = require('./services/leaderboard-report');
+const { sendNextDayPredictionEmails, sendPrematchPredictionEmails } = require('./services/prediction-reminders');
 const { getDatePartsInTz, getShabbatState } = require('./lib/shabbat');
 const { activeThemeAssetsDir, themeDir, DEFAULT_THEME, activeThemeName } = require('./lib/themes');
 
@@ -158,6 +159,29 @@ cron.schedule('0 */2 * * *', () => {
 // דוחות אימייל מתוזמנים: מנהל ב-06:00 ומשתמשים בשעה שהוגדרה בהגדרות
 cron.schedule('* * * * *', () => {
   runScheduledEmailJobs().catch((e) => console.error('   ✗ דוחות מתוזמנים נכשלו:', e.message));
+}, { timezone: 'Asia/Jerusalem' });
+
+// תזכורת לילית (04:00 שעון ישראל): לכל מי שניחש משחקים של "מחר" — מייל עם הניחושים שלו
+cron.schedule('0 4 * * *', () => {
+  console.log('⏰ שליחת תזכורות ניחושים למשחקי מחר...');
+  sendNextDayPredictionEmails()
+    .then((r) => {
+      if (r?.skipped) console.log(`   ↷ תזכורות מחר לא נשלחו (${r.skipped})`);
+      else console.log(`   ✓ נשלחו ${r.sent} תזכורות מחר (נכשלו: ${r.failed})`);
+    })
+    .catch((e) => console.error('   ✗ תזכורות מחר נכשלו:', e.message));
+}, { timezone: 'Asia/Jerusalem' });
+
+// תזכורת 2.5 שעות לפני כל משחק: לכל מי שניחש את אותו משחק — מייל עם הניחוש שלו.
+// רץ כל 5 דק׳ ובודק משחקים שחוצים את סף ה-2.5 שעות (עם דה-דופ פר-משחק).
+cron.schedule('*/5 * * * *', () => {
+  sendPrematchPredictionEmails()
+    .then((r) => {
+      if (r && !r.skipped && r.matches > 0) {
+        console.log(`   ✓ תזכורות טרום-משחק: ${r.sent} נשלחו עבור ${r.matches} משחקים (נכשלו: ${r.failed})`);
+      }
+    })
+    .catch((e) => console.error('   ✗ תזכורות טרום-משחק נכשלו:', e.message));
 }, { timezone: 'Asia/Jerusalem' });
 
 const PORT = process.env.PORT || 4026;
