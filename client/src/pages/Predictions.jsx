@@ -5,7 +5,7 @@ import Flag from '../components/Flag';
 import ScoreText from '../components/ScoreText';
 import { useTranslation } from '../i18n/TranslationContext';
 import { useAuth } from '../context/AuthContext';
-import { ilDate, ilTime, ilMs, ilDayKey } from '../utils/time';
+import { ilDate, ilTime, ilMs, ilDayKey, parseScheduleLockMs } from '../utils/time';
 
 function formatDateTime(iso, locale) {
   return {
@@ -81,9 +81,8 @@ export default function Predictions() {
       const lh = Number(scoringRes?.data?.lockHoursBefore);
       if (Number.isFinite(lh) && lh >= 0) setLockHours(lh);
       const specialLockRow = (scheduleRes.data || []).find((item) => item.title === 'סגירת ניחושים מיוחדים');
-      if (specialLockRow?.start_at) {
-        const raw = String(specialLockRow.start_at);
-        const lockAt = ilMs(raw);
+      if (specialLockRow) {
+        const lockAt = parseScheduleLockMs(specialLockRow);
         setSpecialLocked(Date.now() >= lockAt);
         setSpecialLockLabel(specialLockRow.date_label || '');
       }
@@ -382,7 +381,7 @@ export default function Predictions() {
                 const homeName = pickText(m.home_name, m.home_name_en, m.home_name_ar);
                 const awayName = pickText(m.away_name, m.away_name_en, m.away_name_ar);
                 return (
-                  <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`}>
+                  <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="ltr">
                     <div className="match-team home">
                       <span className="name">{homeName}</span>
                       <Flag code={m.home_code} size="sm" title={homeName} />
@@ -434,7 +433,7 @@ export default function Predictions() {
                     </div>
                     {finished && Number.isInteger(p.home) && Number.isInteger(p.away) && (
                       <div className="prediction-finished-summary">
-                        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <span dir="ltr" style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
                           <span>{t('home.my_guess_label')}</span>
                           <ScoreText home={p.home} away={p.away} />
                         </span>

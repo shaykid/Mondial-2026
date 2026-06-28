@@ -4,6 +4,7 @@ const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { seedPlayersIfEmpty } = require('../lib/players-catalog');
 const { seedScheduleItems } = require('../lib/schedule-items');
+const { parseScheduleLockMs } = require('../lib/special-lock');
 const { leaderboard, userGroupStats } = require('../services/scoring');
 
 const router = express.Router();
@@ -151,17 +152,18 @@ router.post('/special', auth(), async (req, res) => {
     const { champion_code, runner_up_code, top_scorer, top_scorer_player_id } = req.body || {};
 
     const specialLockRow = await db.one(`
-      SELECT start_at
+      SELECT start_at, date_label
       FROM schedule_items
       WHERE title = 'סגירת ניחושים מיוחדים'
       ORDER BY sort_order ASC, id ASC
       LIMIT 1
     `);
-    if (specialLockRow?.start_at) {
-      const raw = String(specialLockRow.start_at);
-      const lockAt = new Date(raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`).getTime();
+    if (specialLockRow) {
+      const lockAt = parseScheduleLockMs(specialLockRow);
       if (Date.now() >= lockAt) {
-        return res.status(403).json({ error: 'נעילה: ניחושים מיוחדים נסגרו ב-8.7 בשעה 12:00' });
+        return res.status(403).json({
+          error: `נעילה: ניחושים מיוחדים נסגרו ב-${specialLockRow.date_label || 'המועד שנקבע'}`
+        });
       }
     }
 
