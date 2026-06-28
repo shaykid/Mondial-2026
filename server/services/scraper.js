@@ -140,6 +140,30 @@ function normalizeText(value) {
     .replace(/\s+/g, ' ');
 }
 
+function isPlaceholderTeamLabel(value) {
+  const text = normalizeText(value);
+  if (!text) return true;
+  return [
+    /^tbd$/,
+    /^winner /,
+    /^loser /,
+    /^runner-up /,
+    /^best 3rd place /,
+    /^best third place /,
+    /^w\d+$/,
+    /^l\d+$/,
+    /^m\d+$/,
+    /^\d+[a-z0-9]+$/,
+    /^\d+\s*-\s*\d+$/
+  ].some((pattern) => pattern.test(text));
+}
+
+function preferConcreteLabel(incoming, existing) {
+  if (incoming && !isPlaceholderTeamLabel(incoming)) return incoming;
+  if (existing && !isPlaceholderTeamLabel(existing)) return existing;
+  return incoming || existing || null;
+}
+
 function eventLabel(comp, side) {
   const competitor = comp?.competitors?.find((c) => c.homeAway === side);
   const teamName = competitor?.team?.displayName || competitor?.team?.shortDisplayName || competitor?.team?.name || '';
@@ -219,12 +243,12 @@ async function upsertFixture(fixture) {
     const currentAwayCode = existing.away_code || null;
     const nextHomeCode = fixture.homeCode || currentHomeCode;
     const nextAwayCode = fixture.awayCode || currentAwayCode;
-    const nextHomeHe = fixture.homeLabelHe || existing.home_label_he || null;
-    const nextHomeEn = fixture.homeLabelEn || existing.home_label_en || null;
-    const nextHomeAr = fixture.homeLabelAr || existing.home_label_ar || null;
-    const nextAwayHe = fixture.awayLabelHe || existing.away_label_he || null;
-    const nextAwayEn = fixture.awayLabelEn || existing.away_label_en || null;
-    const nextAwayAr = fixture.awayLabelAr || existing.away_label_ar || null;
+    const nextHomeHe = preferConcreteLabel(fixture.homeLabelHe, existing.home_label_he);
+    const nextHomeEn = preferConcreteLabel(fixture.homeLabelEn, existing.home_label_en);
+    const nextHomeAr = preferConcreteLabel(fixture.homeLabelAr, existing.home_label_ar);
+    const nextAwayHe = preferConcreteLabel(fixture.awayLabelHe, existing.away_label_he);
+    const nextAwayEn = preferConcreteLabel(fixture.awayLabelEn, existing.away_label_en);
+    const nextAwayAr = preferConcreteLabel(fixture.awayLabelAr, existing.away_label_ar);
     const nextKickoff = new Date(fixture.kickoff).toISOString().slice(0, 19).replace('T', ' ');
     await db.run(`
       UPDATE matches
