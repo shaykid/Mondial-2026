@@ -217,6 +217,9 @@ const translations = {
   // ───── ריביו קולי על משחק ─────
   'reviews.record_tip': { he: 'הקלט ריביו על המשחק', en: 'Record a match review', ar: 'سجّل مراجعة للمباراة' },
   'reviews.publish_cta': { he: 'פרסם את התחזית שלך', en: 'Publish your prediction', ar: 'انشر توقعك' },
+  'reviews.listen_cta': { he: 'שמע את התחזית שלך', en: 'Listen to your prediction', ar: 'استمع إلى توقعك' },
+  'reviews.listen_cta_f': { he: 'שמעי את התחזית שלך', en: 'Listen to your prediction', ar: 'استمعي إلى توقعك' },
+  'reviews.rerecord': { he: 'הקלט מחדש', en: 'Re-record', ar: 'إعادة التسجيل' },
   'reviews.recording': { he: 'מקליט… הקש לסיום', en: 'Recording… tap to stop', ar: 'جارٍ التسجيل… انقر للإيقاف' },
   'reviews.transcribing': { he: 'מתמלל…', en: 'Transcribing…', ar: 'جارٍ التفريغ…' },
   'reviews.modal_title': { he: 'לפרסם את הריביו שלך?', en: 'Publish your review?', ar: 'نشر مراجعتك؟' },

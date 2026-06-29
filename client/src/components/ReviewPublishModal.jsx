@@ -3,10 +3,10 @@ import api, { errMsg } from '../api/client';
 import { useTranslation } from '../i18n/TranslationContext';
 
 // פופ-אפ פרסום ריביו: טקסט מתומלל הניתן לעריכה + תצוגת אודיו + צירוף הניחוש
-export default function ReviewPublishModal({ matchId, audioUrl, transcript, warning, onClose, onPublished }) {
+export default function ReviewPublishModal({ matchId, audioUrl, transcript, initialBody, warning, onClose, onPublished, onRerecord }) {
   const { t } = useTranslation();
-  const [body, setBody] = useState(transcript || '');
-  const [includePrediction, setIncludePrediction] = useState(false);
+  const [body, setBody] = useState(initialBody || transcript || '');
+  const [includePrediction, setIncludePrediction] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -62,14 +62,21 @@ export default function ReviewPublishModal({ matchId, audioUrl, transcript, warn
           <span>{t('reviews.attach_prediction')}</span>
         </label>
 
-        <button
-          className="btn btn-gold"
-          style={{ width:'100%', justifyContent:'center', marginTop:12 }}
-          onClick={publish}
-          disabled={busy || !body.trim()}
-        >
-          {busy ? <span className="spinner" /> : t('reviews.publish')}
-        </button>
+        <div style={{ display:'flex', gap:8, marginTop:12 }}>
+          {onRerecord && (
+            <button type="button" className="btn btn-outline" style={{ justifyContent:'center' }} onClick={() => !busy && onRerecord()} disabled={busy}>
+              🎙️ {t('reviews.rerecord')}
+            </button>
+          )}
+          <button
+            className="btn btn-gold"
+            style={{ flex:1, justifyContent:'center' }}
+            onClick={publish}
+            disabled={busy || !body.trim()}
+          >
+            {busy ? <span className="spinner" /> : t('reviews.publish')}
+          </button>
+        </div>
       </div>
     </div>
   );

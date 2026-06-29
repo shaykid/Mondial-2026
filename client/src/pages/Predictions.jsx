@@ -58,6 +58,7 @@ export default function Predictions() {
   const [predictions, setPredictions] = useState({});  // matchId -> {home, away, points, locked, saved}
   const [aiPredictions, setAiPredictions] = useState({}); // matchId -> {sources, consensus}
   const [reviewsByMatch, setReviewsByMatch] = useState({}); // matchId -> [reviews]
+  const [myReviewByMatch, setMyReviewByMatch] = useState({}); // matchId -> my review
   const [special, setSpecial] = useState({ champion_code: '', runner_up_code: '', top_scorer: '' });
   const [specialLocked, setSpecialLocked] = useState(false);
   const [specialLockLabel, setSpecialLockLabel] = useState('');
@@ -112,7 +113,17 @@ export default function Predictions() {
     });
     api.get('/ai-predictions').then(r => setAiPredictions(r.data || {})).catch(() => {});
     api.get('/reviews/summary').then(r => setReviewsByMatch(r.data || {})).catch(() => {});
+    refreshMyReviews();
   }, []);
+
+  const refreshMyReviews = () => {
+    if (isGuest) return;
+    api.get('/reviews/mine').then(r => {
+      const map = {};
+      (r.data || []).forEach(rev => { map[rev.match_id] = rev; });
+      setMyReviewByMatch(map);
+    }).catch(() => {});
+  };
 
   const onChange = (matchId, side, value) => {
     const cleaned = String(value ?? '').replace(/[^\d]/g, '');
@@ -417,7 +428,8 @@ export default function Predictions() {
                         <MatchReviewRecorder
                           matchId={m.id}
                           disabled={locked || finished}
-                          onPublished={() => setReviewBump(b => ({ ...b, [m.id]: (b[m.id] || 0) + 1 }))}
+                          myReview={myReviewByMatch[m.id]}
+                          onPublished={() => { setReviewBump(b => ({ ...b, [m.id]: (b[m.id] || 0) + 1 })); refreshMyReviews(); }}
                         />
                       )}
                       <div className="scores-block">

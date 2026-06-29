@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/client';
 import { useTranslation } from '../i18n/TranslationContext';
+import { useAuth } from '../context/AuthContext';
 import ReviewPublishModal from './ReviewPublishModal';
 
 // כפתור הקלטה צף (תכלת, חצי-שקוף) מעל תיבות הניחוש.
 // הקש → התחלת הקלטה. הקש שוב / Enter → סיום, תמלול, ופתיחת פופ-אפ פרסום.
-export default function MatchReviewRecorder({ matchId, disabled, onPublished }) {
+// אם כבר קיים ריביו של המשתמש למשחק — האייקון הופך ל-▶ ופתיחתו עורכת את הריביו.
+export default function MatchReviewRecorder({ matchId, disabled, onPublished, myReview }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [state, setState] = useState('idle'); // idle | recording | uploading
   const [err, setErr] = useState('');
   const [modal, setModal] = useState(null); // { audioUrl, transcript, warning }
@@ -63,18 +66,31 @@ export default function MatchReviewRecorder({ matchId, disabled, onPublished }) 
     }
   };
 
+  const hasReview = !!myReview;
+
+  const openEdit = () => setModal({
+    audioUrl: myReview.audio_url || null,
+    transcript: myReview.transcript || '',
+    body: myReview.body || '',
+    warning: ''
+  });
+
   const onClick = () => {
     if (state === 'recording') stop();
-    else if (state === 'idle') start();
+    else if (state === 'idle') { hasReview ? openEdit() : start(); }
   };
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && state === 'recording') { e.preventDefault(); stop(); }
   };
 
+  const female = (user?.gender === 'female');
+  const idleLabel = hasReview
+    ? (female ? t('reviews.listen_cta_f') : t('reviews.listen_cta'))
+    : t('reviews.publish_cta');
   const label = state === 'recording' ? t('reviews.recording')
     : state === 'uploading' ? t('reviews.transcribing')
-    : t('reviews.record_tip');
+    : (hasReview ? idleLabel : t('reviews.record_tip'));
 
   return (
     <>
@@ -89,9 +105,9 @@ export default function MatchReviewRecorder({ matchId, disabled, onPublished }) 
       >
         {state === 'uploading'
           ? <span className="spinner" />
-          : <span className="review-rec-ico" aria-hidden="true">{state === 'recording' ? '■' : '🎙️'}</span>}
+          : <span className="review-rec-ico" aria-hidden="true">{state === 'recording' ? '■' : (hasReview ? '▶' : '🎙️')}</span>}
       </button>
-      {state === 'idle' && !disabled && <span className="review-rec-cta" aria-hidden="true">{t('reviews.publish_cta')}</span>}
+      {state === 'idle' && !disabled && <span className="review-rec-cta" aria-hidden="true">{idleLabel}</span>}
       {err && <span className="review-rec-err">{err}</span>}
 
       {modal && (
@@ -99,9 +115,11 @@ export default function MatchReviewRecorder({ matchId, disabled, onPublished }) 
           matchId={matchId}
           audioUrl={modal.audioUrl}
           transcript={modal.transcript}
+          initialBody={modal.body}
           warning={modal.warning}
           onClose={() => setModal(null)}
           onPublished={onPublished}
+          onRerecord={() => { setModal(null); start(); }}
         />
       )}
     </>
