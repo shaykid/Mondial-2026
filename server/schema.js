@@ -244,6 +244,27 @@ module.exports = [
   `CREATE TABLE IF NOT EXISTS settings (
     \`key\`   VARCHAR(80)    NOT NULL PRIMARY KEY,
     \`value\` TEXT           NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // ────────── ריביו קולי על משחק ──────────
+  `CREATE TABLE IF NOT EXISTS match_reviews (
+    id                 INT             AUTO_INCREMENT PRIMARY KEY,
+    user_id            INT             NOT NULL,
+    match_id           INT             NOT NULL,
+    audio_url          VARCHAR(500)    NULL,
+    transcript         TEXT            NULL,
+    body               TEXT            NOT NULL,
+    include_prediction TINYINT(1)      NOT NULL DEFAULT 0,
+    pred_home          INT             NULL,
+    pred_away          INT             NULL,
+    status             ENUM('draft','published') NOT NULL DEFAULT 'published',
+    created_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_match_reviews_user_match (user_id, match_id),
+    INDEX idx_match_reviews_match (match_id),
+    INDEX idx_match_reviews_user (user_id),
+    CONSTRAINT fk_match_reviews_user  FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
+    CONSTRAINT fk_match_reviews_match FOREIGN KEY (match_id) REFERENCES matches(id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 ];

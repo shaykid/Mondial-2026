@@ -4,6 +4,7 @@ import api, { errMsg } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../i18n/TranslationContext';
 import { UserGroupBadges } from '../components/GroupBadges';
+import MyReviews from '../components/MyReviews';
 
 export default function Profile() {
   const { user, updateProfile } = useAuth();
@@ -210,6 +211,8 @@ export default function Profile() {
           </button>
         </form>
       </div>
+
+      <MyReviews />
 
       {user?.canGuessGroups && <TopGroupsBanner groups={topGroups} t={t} />}
     </main>

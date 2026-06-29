@@ -139,6 +139,7 @@ async function seed() {
     ['scoring_top_scorer','15'],
     ['lock_hours_before', process.env.LOCK_HOURS_BEFORE || '1'],
     ['scraper_mode',      process.env.SCRAPER_MODE || 'manual'],
+    ['espn_scoreboard_url', ''],
     // ניחוש קבוצתי — גבולות הניתנים לשינוי בלוח הניהול
     ['group_max_per_user',   '8'],
     ['group_max_members',    '5'],

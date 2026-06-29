@@ -63,6 +63,20 @@ async function getModeFromSettings() {
 // scoreboard API instead, which returns clean structured fixtures + scores.
 const ESPN_SCOREBOARD =
   'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+const ESPN_DEFAULT_URL = `${ESPN_SCOREBOARD}?dates=20260611-20260719`;
+
+// כתובת ה-API לסקרייפינג ניתנת להגדרה מטאב "מקור נתונים" בניהול (settings.espn_scoreboard_url).
+// ערך ריק / לא תקין → נופלים חזרה לברירת המחדל הקבועה בקוד.
+async function getEspnUrl() {
+  try {
+    const r = await db.one("SELECT `value` FROM settings WHERE `key` = 'espn_scoreboard_url'");
+    const raw = (r && r.value || '').trim();
+    if (/^https?:\/\//i.test(raw) && /espn\.com/i.test(raw)) return raw;
+  } catch (e) {
+    console.error('getEspnUrl:', e.message);
+  }
+  return ESPN_DEFAULT_URL;
+}
 
 const STAGE_WINDOWS = [
   { stage: 'group', start: '2026-06-11T00:00:00Z', end: '2026-06-27T23:59:59Z' },
@@ -325,7 +339,7 @@ async function upsertFixture(fixture) {
 }
 
 async function fetchESPNEvents() {
-  const url = `${ESPN_SCOREBOARD}?dates=20260611-20260719`;
+  const url = await getEspnUrl();
   const { data } = await axios.get(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Mondial2026Bot/1.0)' },
     timeout: 20000

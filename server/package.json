@@ -15,6 +15,7 @@
     "db:reset": "node scripts/db-reset.js"
   },
   "dependencies": {
+    "@hinbit/transcriber": "^1.0.0",
     "@resvg/resvg-js": "^2.6.2",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",

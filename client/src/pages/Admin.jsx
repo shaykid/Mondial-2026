@@ -28,6 +28,7 @@ export default function Admin() {
     { id: 'messages', label: 'שליחת הודעות' },
     { id: 'contact', label: 'צור קשר' },
     { id: 'schedule', label: t('admin.tab_schedule') },
+    { id: 'datasource', label: 'מקור נתונים' },
     { id: 'actions', label: t('admin.tab_actions') }
   ];
   const tabs = isFullAdmin ? allTabs : allTabs.filter(item => MANAGER_TABS.includes(item.id));
@@ -59,6 +60,7 @@ export default function Admin() {
       {tab === 'messages' && <MessagesTab />}
       {tab === 'contact'  && <ContactTab  />}
       {tab === 'schedule' && <ScheduleTab />}
+      {tab === 'datasource' && <DataSourceTab />}
       {tab === 'actions'  && <ActionsTab  />}
     </div>
   );
@@ -2357,6 +2359,144 @@ function MessagesTab() {
           </button>
         </div>
       </SettingsCard>
+    </div>
+  );
+}
+
+/* ─────────────── מקור נתונים ─────────────── */
+function DataSourceTab() {
+  const DEFAULT_HINT = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719';
+  const [mode, setMode] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [draftUrl, setDraftUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+
+  const load = () => {
+    api.get('/admin/settings')
+      .then(r => {
+        setSourceUrl((r.data?.espn_scoreboard_url || '').trim());
+        setMode(r.data?.scraper_mode || 'manual');
+      })
+      .catch(e => setErr(errMsg(e)));
+  };
+  useEffect(load, []);
+
+  const isValid = (u) => /^https?:\/\//i.test(u.trim()) && /espn\.com/i.test(u.trim());
+
+  const openModal = () => {
+    setErr(''); setOk('');
+    setDraftUrl(sourceUrl);
+    setModalOpen(true);
+  };
+
+  const saveUrl = async () => {
+    const clean = draftUrl.trim();
+    if (clean && !isValid(clean)) {
+      setErr('כתובת לא תקינה — חייבת להתחיל ב-http(s) ולכלול espn.com (השאר ריק לברירת המחדל מהקוד)');
+      return;
+    }
+    setSaving(true);
+    setErr(''); setOk('');
+    try {
+      await api.post('/admin/settings', { espn_scoreboard_url: clean });
+      setSourceUrl(clean);
+      setModalOpen(false);
+      setOk('מקור הנתונים נשמר');
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testNow = async () => {
+    setTesting(true);
+    setErr(''); setOk('');
+    try {
+      const r = await api.post('/admin/scrape-now');
+      const d = r.data || {};
+      const count = d.updated ?? d.matched ?? d.events ?? d.scanned;
+      setOk('הסקרייפר רץ בהצלחה' + (count != null ? ` — ${count} משחקים עודכנו` : ''));
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      {err && <div className="alert alert-error" style={{ wordBreak: 'break-all' }}>{err}</div>}
+      {ok  && <div className="alert alert-success" style={{ wordBreak: 'break-all' }}>{ok}</div>}
+
+      <div style={{
+        background: 'var(--paper-pure)',
+        border: '1px solid var(--line)',
+        borderRadius: 6,
+        padding: 24,
+        marginBottom: 16
+      }}>
+        <h3 style={{ marginTop: 0, marginBottom: 8, fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--ink)' }}>
+          מקור נתונים — ESPN
+        </h3>
+        <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
+          הכתובת שממנה הסקרייפר מושך את לוח המשחקים והתוצאות. ניתן לשנות גם את טווח התאריכים (פרמטר <code>dates</code>) בתוך הכתובת. השאר ריק כדי להשתמש בברירת המחדל הקבועה בקוד.
+        </p>
+
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>כתובת ה-API הפעילה</label>
+          <div style={{
+            direction: 'ltr', textAlign: 'left', wordBreak: 'break-all',
+            background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 6,
+            padding: '10px 12px', fontSize: 13, color: 'var(--ink)'
+          }}>
+            {sourceUrl || `ברירת מחדל מהקוד: ${DEFAULT_HINT}`}
+          </div>
+        </div>
+
+        <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
+          מצב סקרייפר נוכחי: <strong>{mode || '—'}</strong> (נקבע בטאב "הגדרות"). הבדיקה למטה רצה רק כשהמצב הוא <code>espn</code>.
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button className="btn btn-pitch" onClick={openModal}>ערוך קישור מקור</button>
+          <button className="btn btn-gold" onClick={testNow} disabled={testing}>
+            {testing ? 'בודק...' : 'בדוק עכשיו'}
+          </button>
+        </div>
+      </div>
+
+      {modalOpen && (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal">
+            <div className="admin-modal-head">
+              <div>
+                <h3>עריכת קישור מקור ESPN</h3>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                  הדבק כתובת ESPN scoreboard מלאה (כולל <code>?dates=</code>). ריק = ברירת המחדל מהקוד.
+                </div>
+              </div>
+              <button className="btn btn-sm btn-outline" onClick={() => setModalOpen(false)}>סגור</button>
+            </div>
+            <div className="field" style={{ marginTop: 16 }}>
+              <label>כתובת API</label>
+              <input
+                style={{ direction: 'ltr', textAlign: 'left' }}
+                value={draftUrl}
+                placeholder={DEFAULT_HINT}
+                onChange={e => setDraftUrl(e.target.value)}
+              />
+            </div>
+            <button className="btn btn-pitch" onClick={saveUrl} disabled={saving} style={{ marginTop: 16 }}>
+              {saving ? 'שומר...' : 'שמור'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

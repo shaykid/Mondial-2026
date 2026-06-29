@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api, { errMsg } from '../api/client';
 import Flag from '../components/Flag';
 import ScoreText from '../components/ScoreText';
+import MatchReviewRecorder from '../components/MatchReviewRecorder';
+import MatchReviews from '../components/MatchReviews';
 import { useTranslation } from '../i18n/TranslationContext';
 import { useAuth } from '../context/AuthContext';
 import { ilDate, ilTime, ilMs, ilDayKey, parseScheduleLockMs } from '../utils/time';
@@ -66,6 +68,7 @@ export default function Predictions() {
   const [savingSpecial, setSavingSpecial] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [msg, setMsg] = useState('');
+  const [reviewBump, setReviewBump] = useState({}); // matchId -> number, מאלץ רענון ריביוים אחרי פרסום
 
   useEffect(() => {
     Promise.all([
@@ -396,7 +399,8 @@ export default function Predictions() {
                 const home = getMatchTeamName(m, 'home', pickText);
                 const away = getMatchTeamName(m, 'away', pickText);
                 return (
-                  <div key={m.id} className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="rtl">
+                 <div key={m.id} className="prediction-block">
+                  <div className={`prediction-row ${locked ? 'locked' : ''} ${finished ? 'finished-result' : ''} ${p.points ? 'scored' : ''}`} dir="rtl">
                     <div className="match-team home">
                       <span className="home-emoji" aria-hidden="true" title="קבוצת בית">🏠</span>
                       <span className={`name ${home.placeholder ? 'placeholder' : ''}`}>{home.name}</span>
@@ -404,6 +408,13 @@ export default function Predictions() {
                     </div>
 
                     <div className="scores-col">
+                      {!isGuest && (
+                        <MatchReviewRecorder
+                          matchId={m.id}
+                          disabled={locked || finished}
+                          onPublished={() => setReviewBump(b => ({ ...b, [m.id]: (b[m.id] || 0) + 1 }))}
+                        />
+                      )}
                       <div className="scores-block">
                         <input
                           type="text"
@@ -461,6 +472,8 @@ export default function Predictions() {
                       </div>
                     )}
                   </div>
+                  {!isGuest && <MatchReviews matchId={m.id} bump={reviewBump[m.id] || 0} />}
+                 </div>
                 );
               })}
             </div>
