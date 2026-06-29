@@ -1,5 +1,6 @@
 // מנוע חישוב ניקוד (async/MySQL)
 const db = require('../db');
+const { settleCoinBetsForMatch } = require('./coins');
 
 async function getSettingNum(key, def) {
   const r = await db.one('SELECT `value` FROM settings WHERE `key` = ?', [key]);
@@ -55,6 +56,9 @@ async function recalcForMatch(matchId) {
 
   // עדכון ניקוד גם להימורי הקבוצות (ניחוש קבוצתי) על אותו משחק
   await recalcGroupBetsForMatch(matchId);
+
+  // יישוב הימורי המטבעות ("שיחים") על אותו משחק
+  await settleCoinBetsForMatch(matchId);
 
   return preds.length;
 }

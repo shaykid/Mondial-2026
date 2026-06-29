@@ -33,6 +33,7 @@ app.use('/api/schedule',     require('./routes/schedule'));
 app.use('/api/predictions',  require('./routes/predictions'));
 app.use('/api/reviews',      require('./routes/reviews'));
 app.use('/api/guess-groups', require('./routes/guess-groups'));
+app.use('/api/coin-bets',    require('./routes/coin-bets'));
 app.use('/api/leaderboard',  require('./routes/leaderboard'));
 app.use('/api/admin',        require('./routes/admin'));
 

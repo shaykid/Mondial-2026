@@ -265,6 +265,55 @@ module.exports = [
     INDEX idx_match_reviews_user (user_id),
     CONSTRAINT fk_match_reviews_user  FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
     CONSTRAINT fk_match_reviews_match FOREIGN KEY (match_id) REFERENCES matches(id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // ────────── הימורי מטבעות ("שיחים") ──────────
+  // ארנק מטבעות לכל משתמש (יתרת פתיחה 10,000)
+  `CREATE TABLE IF NOT EXISTS coin_wallets (
+    user_id    INT          NOT NULL PRIMARY KEY,
+    balance    INT          NOT NULL DEFAULT 10000,
+    created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_coin_wallets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // הימור 1:1 בין שני משתמשים (סכום שווה, המנצח לוקח 2X)
+  `CREATE TABLE IF NOT EXISTS coin_bets (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    match_id       INT          NOT NULL,
+    market         ENUM('result') NOT NULL DEFAULT 'result',
+    proposition    ENUM('home','draw','away') NOT NULL,
+    stake          INT          NOT NULL,
+    creator_id     INT          NOT NULL,
+    opponent_id    INT          NULL,
+    target_user_id INT          NULL,
+    status         ENUM('open','matched','settled','cancelled','void') NOT NULL DEFAULT 'open',
+    winner_id      INT          NULL,
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    settled_at     DATETIME      NULL,
+    updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_coin_bets_match (match_id),
+    INDEX idx_coin_bets_status (status),
+    INDEX idx_coin_bets_creator (creator_id),
+    INDEX idx_coin_bets_opponent (opponent_id),
+    CONSTRAINT fk_coin_bets_match    FOREIGN KEY (match_id)       REFERENCES matches(id),
+    CONSTRAINT fk_coin_bets_creator  FOREIGN KEY (creator_id)     REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_coin_bets_opponent FOREIGN KEY (opponent_id)    REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_coin_bets_target   FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // ספר חשבונות (audit) לכל תזוזת מטבעות
+  `CREATE TABLE IF NOT EXISTS coin_transactions (
+    id            INT          AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT          NOT NULL,
+    amount        INT          NOT NULL,
+    reason        VARCHAR(40)   NOT NULL,
+    bet_id        INT          NULL,
+    balance_after INT          NOT NULL,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_coin_tx_user (user_id),
+    INDEX idx_coin_tx_bet (bet_id),
+    CONSTRAINT fk_coin_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 ];

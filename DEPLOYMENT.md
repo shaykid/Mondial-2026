@@ -66,6 +66,17 @@ NO automatic transcription until all three are satisfied.
 
 ---
 
+## Feature: Coin betting "שיחים" (Phase 1) — added 2026-06
+
+Peer-to-peer even-money wagers on match result (1/X/2). Every user gets a 10,000-coin
+wallet on first access. No new system deps, no secrets — **just `db:init`** (creates
+`coin_wallets`, `coin_bets`, `coin_transactions`) + build + restart. Settlement is
+automatic: `settleCoinBetsForMatch` is called from `recalcForMatch` (same path the scraper
+and admin "recalc all" already trigger). Coin label translations self-seed on first
+`/api/site/translations` fetch. Penalty-count betting is **not** in Phase 1 — it needs
+shootout data the scraper/schema do not yet capture (would require a `matches` penalty
+column + ESPN-JSON parsing).
+
 ## Feature: Data-source admin tab ("מקור נתונים") — added 2026-06
 
 - Admin → **מקור נתונים** lets an admin paste the ESPN scoreboard API URL.

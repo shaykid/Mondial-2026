@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Flag from '../components/Flag';
@@ -13,6 +14,7 @@ export default function Home() {
   const [matches, setMatches] = useState([]);
   const [myPredictions, setMyPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [coinBalance, setCoinBalance] = useState(null);
   const [editingMatchId, setEditingMatchId] = useState(null);
   const [draft, setDraft] = useState({ home: '', away: '' });
   const [saving, setSaving] = useState(false);
@@ -22,6 +24,7 @@ export default function Home() {
     api.get('/matches').then(r => setMatches(r.data)).catch(() => {});
     api.get('/predictions/my').then(r => setMyPredictions(r.data.predictions)).catch(() => {});
     api.get('/leaderboard').then(r => setLeaderboard(r.data)).catch(() => {});
+    if (!user.isGuest) api.get('/coin-bets/wallet').then(r => setCoinBalance(r.data.balance)).catch(() => {});
   }, []);
 
   const upcoming = matches
@@ -109,6 +112,12 @@ export default function Home() {
           <div className="label">{t('home.exact_hits')}</div>
           <div className="value" style={{color:'var(--gold-deep)'}}>{myRank?.exact_hits ?? 0}</div>
         </div>
+        {coinBalance != null && (
+          <Link to="/coin-bets" className="stat-card" style={{ textDecoration: 'none' }}>
+            <div className="label">{t('coin.balance')}</div>
+            <div className="value" style={{color:'var(--gold)'}}>🪙 {coinBalance.toLocaleString()}</div>
+          </Link>
+        )}
       </div>
 
       <div className="section-divider">

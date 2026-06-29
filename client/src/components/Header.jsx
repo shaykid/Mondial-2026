@@ -44,6 +44,9 @@ export default function Header() {
           {user.canGuessGroups && (
             <NavLink to="/guess-groups" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.guess_groups')}</NavLink>
           )}
+          {!user.isGuest && (
+            <NavLink to="/coin-bets" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.coin_betting')}</NavLink>
+          )}
           <NavLink to="/leaderboard" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.leaderboard')}</NavLink>
           <NavLink to="/profile" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.profile')}</NavLink>
           {(user.isAdmin || user.role === 'manager') && (

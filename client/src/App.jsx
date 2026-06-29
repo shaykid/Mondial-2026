@@ -14,6 +14,7 @@ import SchedulePrizes from './pages/SchedulePrizes';
 import Groups from './pages/Groups';
 import GuessGroups from './pages/GuessGroups';
 import GuessGroupDetail from './pages/GuessGroupDetail';
+import CoinBets from './pages/CoinBets';
 import Leaderboard from './pages/Leaderboard';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/groups" element={<ProtectedRoute><Groups /></ProtectedRoute>} />
         <Route path="/guess-groups" element={<ProtectedRoute requireGuessGroups><GuessGroups /></ProtectedRoute>} />
         <Route path="/guess-groups/:id" element={<ProtectedRoute requireGuessGroups><GuessGroupDetail /></ProtectedRoute>} />
+        <Route path="/coin-bets" element={<ProtectedRoute><CoinBets /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute staffOnly><Admin /></ProtectedRoute>} />

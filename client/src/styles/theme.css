@@ -1966,3 +1966,53 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 }
 .review-attach { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); margin-top: 4px; cursor: pointer; }
 .my-reviews-list { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+
+/* ─────────── הימורי מטבעות ("שיחים") ─────────── */
+.coin-wallet-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(135deg, var(--ink), #15243a);
+  color: var(--paper); border-radius: 12px; padding: 16px 22px; margin-bottom: 20px;
+}
+.coin-wallet-label { font-size: 14px; color: rgba(245,240,230,0.75); }
+.coin-wallet-value { font-family: var(--font-numeric, inherit); font-size: 28px; color: var(--gold); font-weight: 700; }
+
+.coin-list { display: flex; flex-direction: column; gap: 14px; }
+.coin-empty { color: var(--muted); padding: 24px; text-align: center; }
+.coin-card { background: var(--paper-pure); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.coin-card.coin-won { border-color: var(--pitch); box-shadow: 0 0 0 1px var(--pitch) inset; }
+.coin-card.coin-lost { border-color: var(--crimson); opacity: .85; }
+.coin-match-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); font-weight: 600; flex-wrap: wrap; }
+.coin-vs { color: var(--muted); }
+.coin-match-when { color: var(--muted); font-weight: 400; margin-inline-start: auto; font-size: 12px; }
+.coin-card-body { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.coin-creator { font-weight: 700; color: var(--ink); }
+.coin-prop { color: var(--ink); }
+.coin-challenge-tag { color: var(--gold-deep, var(--gold)); font-size: 12px; }
+.coin-vs-who { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.coin-stake { font-size: 20px; font-weight: 700; color: var(--gold-deep, var(--gold)); white-space: nowrap; }
+.coin-card-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.coin-you-take { font-size: 13px; color: var(--muted); }
+.coin-status { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--paper); color: var(--ink); }
+.coin-status-matched { background: rgba(45,110,62,0.15); color: var(--pitch); }
+.coin-status-settled { background: var(--ink); color: var(--paper); }
+.coin-status-open { background: rgba(230,181,74,0.2); color: var(--gold-deep, #9a6b00); }
+.coin-result-win { color: var(--pitch); font-weight: 700; }
+.coin-result-lose { color: var(--crimson); font-weight: 700; }
+.coin-card-foot .btn, .coin-card-foot .coin-result-win, .coin-card-foot .coin-result-lose { margin-inline-start: auto; }
+
+.coin-create.card { max-width: 560px; }
+.coin-prop-picker { display: flex; gap: 10px; }
+.coin-prop-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 8px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper-pure);
+  cursor: pointer; font-size: 20px; font-weight: 700; color: var(--ink);
+}
+.coin-prop-btn span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.coin-prop-btn.active { border-color: var(--gold); background: rgba(230,181,74,0.12); }
+.coin-hint, .coin-target-chip { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.coin-target-chip { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); background: var(--paper); padding: 6px 10px; border-radius: 999px; }
+.coin-user-results { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; overflow: hidden; }
+.coin-user-result { text-align: start; padding: 8px 12px; background: var(--paper-pure); border: none; border-bottom: 1px solid var(--line); cursor: pointer; }
+.coin-user-result:hover { background: var(--paper); }
+.coin-leaderboard td .gg-badge-row { justify-content: flex-start; }
