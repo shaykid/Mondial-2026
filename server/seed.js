@@ -140,6 +140,9 @@ async function seed() {
     ['lock_hours_before', process.env.LOCK_HOURS_BEFORE || '1'],
     ['scraper_mode',      process.env.SCRAPER_MODE || 'manual'],
     ['espn_scoreboard_url', ''],
+    // תגמול מטבעות לכותבי ריביו: מטבעות לכל הצבעה, ומכפיל לניחוש מדויק
+    ['review_coins_per_vote',     '50'],
+    ['review_correct_multiplier', '5'],
     // ניחוש קבוצתי — גבולות הניתנים לשינוי בלוח הניהול
     ['group_max_per_user',   '8'],
     ['group_max_members',    '5'],

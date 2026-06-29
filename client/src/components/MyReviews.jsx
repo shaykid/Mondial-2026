@@ -91,6 +91,12 @@ export default function MyReviews() {
               <>
                 {rev.body && <div className="review-body">{rev.body}</div>}
                 {rev.audio_url && <audio className="review-audio" controls src={rev.audio_url} />}
+                <div className="review-vote-row">
+                  <span className="review-vote-count">👂 {rev.vote_count || 0} {t('reviews.votes')}</span>
+                  {rev.coins_awarded > 0 && (
+                    <span className="review-coins-earned">🪙 {Number(rev.coins_awarded).toLocaleString()} {t('reviews.coins_earned')}</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button className="btn btn-sm btn-outline" onClick={() => startEdit(rev)} disabled={busy}>{t('common.edit')}</button>
                   <button className="btn btn-sm btn-outline" onClick={() => remove(rev.id)} disabled={busy}>{t('reviews.delete')}</button>

@@ -141,6 +141,10 @@ async function main() {
   await makeColumnNullable('matches', 'home_code', 'VARCHAR(10) NULL');
   await makeColumnNullable('matches', 'away_code', 'VARCHAR(10) NULL');
 
+  // מטבעות שהוענקו לכותב הריביו מהצבעות (×5 אם הניחוש היה מדויק)
+  await addColumnIfMissing('match_reviews', 'coins_awarded',
+    'ALTER TABLE match_reviews ADD COLUMN coins_awarded INT NOT NULL DEFAULT 0 AFTER status');
+
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 

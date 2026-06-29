@@ -6,6 +6,7 @@ const multer = require('multer');
 const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { transcribeAudioBuffer } = require('../services/transcribe');
+const { settleReviewReward } = require('../services/coins');
 
 const router = express.Router();
 const upload = multer({
@@ -146,12 +147,15 @@ router.get('/match/:id', auth(), async (req, res) => {
     const rows = await db.query(`
       SELECT r.id, r.user_id, r.body, r.audio_url, r.include_prediction,
              r.pred_home, r.pred_away, r.created_at,
-             u.name AS user_name, u.profile_image_url
+             u.name AS user_name, u.profile_image_url,
+             (SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS vote_count,
+             EXISTS(SELECT 1 FROM review_votes v WHERE v.review_id = r.id AND v.voter_user_id = ?) AS my_vote
       FROM match_reviews r
       JOIN users u ON u.id = r.user_id
       WHERE r.match_id = ? AND r.status = 'published'
-      ORDER BY r.created_at DESC
-    `, [matchId]);
+      ORDER BY vote_count DESC, r.created_at DESC
+    `, [req.user.id, matchId]);
+    rows.forEach(r => { r.vote_count = Number(r.vote_count); r.my_vote = !!Number(r.my_vote); });
     res.json(rows);
   } catch (e) {
     console.error('reviews/match:', e);
@@ -164,13 +168,15 @@ router.get('/mine', auth(), async (req, res) => {
   try {
     const rows = await db.query(`
       SELECT r.id, r.match_id, r.body, r.audio_url, r.include_prediction,
-             r.pred_home, r.pred_away, r.created_at,
-             m.home_code, m.away_code, m.kickoff, m.status AS match_status
+             r.pred_home, r.pred_away, r.created_at, r.coins_awarded,
+             m.home_code, m.away_code, m.kickoff, m.status AS match_status,
+             (SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS vote_count
       FROM match_reviews r
       JOIN matches m ON m.id = r.match_id
       WHERE r.user_id = ?
       ORDER BY r.created_at DESC
     `, [req.user.id]);
+    rows.forEach(r => { r.vote_count = Number(r.vote_count); r.coins_awarded = Number(r.coins_awarded || 0); });
     res.json(rows);
   } catch (e) {
     console.error('reviews/mine:', e);
@@ -218,6 +224,40 @@ router.delete('/:id', auth(), async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('reviews/delete:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// ───────── הצבעה על ריביו (שמעתי/אהבתי) — מזכה את הכותב במטבעות ─────────
+router.post('/:id/vote', auth(), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'מזהה לא תקין' });
+
+    const review = await db.one('SELECT id, user_id, match_id, coins_awarded FROM match_reviews WHERE id = ?', [id]);
+    if (!review) return res.status(404).json({ error: 'ריביו לא נמצא' });
+    if (review.user_id === req.user.id) return res.status(400).json({ error: 'אי אפשר להצביע לריביו של עצמך' });
+
+    const existing = await db.one(
+      'SELECT id FROM review_votes WHERE review_id = ? AND voter_user_id = ?',
+      [id, req.user.id]
+    );
+    let voted;
+    if (existing) {
+      await db.run('DELETE FROM review_votes WHERE id = ?', [existing.id]);
+      voted = false;
+    } else {
+      await db.run('INSERT IGNORE INTO review_votes (review_id, voter_user_id) VALUES (?, ?)', [id, req.user.id]);
+      voted = true;
+    }
+
+    // אם המשחק כבר הסתיים — עדכן מיד את התגמול (אחרת יתעדכן ביישוב המשחק)
+    try { await settleReviewReward(review); } catch (e) { console.error('review reward:', e.message); }
+
+    const cnt = await db.one('SELECT COUNT(*) AS n FROM review_votes WHERE review_id = ?', [id]);
+    res.json({ ok: true, voted, vote_count: Number(cnt?.n || 0) });
+  } catch (e) {
+    console.error('reviews/vote:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });

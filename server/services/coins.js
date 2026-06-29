@@ -3,6 +3,12 @@ const db = require('../db');
 
 const START_BALANCE = 10000; // יתרת פתיחה לכל משתמש
 
+async function getSettingNum(key, def) {
+  const r = await db.one('SELECT `value` FROM settings WHERE `key` = ?', [key]);
+  const n = r ? Number(r.value) : NaN;
+  return Number.isFinite(n) ? n : def;
+}
+
 // יוצר ארנק אם חסר (מחוץ לטרנזקציה). מחזיר את היתרה.
 async function ensureWallet(userId) {
   const r = await db.run(
@@ -91,6 +97,49 @@ async function settleCoinBetsForMatch(matchId) {
 }
 
 // לוח מצטיינים לפי יתרת מטבעות + סטטיסטיקות הימורים
+// תגמול מטבעות לכותב ריביו לפי מספר ההצבעות, ×5 אם הניחוש שלו היה מדויק.
+// אידמפוטנטי: שומר coins_awarded ומזכה רק את ההפרש — בטוח להרצה חוזרת ומתעדכן
+// כשמגיעות הצבעות נוספות (גם אחרי שהמשחק הסתיים).
+async function settleReviewReward(review) {
+  const match = await db.one('SELECT id, status, home_score, away_score FROM matches WHERE id = ?', [review.match_id]);
+  if (!match || match.status !== 'finished' || match.home_score == null || match.away_score == null) return;
+
+  const votesRow = await db.one('SELECT COUNT(*) AS n FROM review_votes WHERE review_id = ?', [review.id]);
+  const votes = Number(votesRow?.n || 0);
+
+  const pred = await db.one(
+    'SELECT home_score, away_score FROM predictions WHERE user_id = ? AND match_id = ?',
+    [review.user_id, review.match_id]
+  );
+  const correct = !!pred && pred.home_score === match.home_score && pred.away_score === match.away_score;
+
+  const perVote = await getSettingNum('review_coins_per_vote', 50);
+  const multiplier = await getSettingNum('review_correct_multiplier', 5);
+  const target = votes * perVote * (correct ? multiplier : 1);
+  const delta = target - Number(review.coins_awarded || 0);
+  if (delta === 0) return;
+
+  await db.tx(async (t) => {
+    // עדכון אטומי: מזכה רק אם coins_awarded לא השתנה בינתיים
+    const upd = await t.run(
+      'UPDATE match_reviews SET coins_awarded = ? WHERE id = ? AND coins_awarded = ?',
+      [target, review.id, Number(review.coins_awarded || 0)]
+    );
+    if (upd.affectedRows) {
+      await adjust(t, review.user_id, delta, 'review_reward');
+    }
+  });
+}
+
+// יישוב תגמולי הריביו לכל הריביוים על משחק שהסתיים. נקרא מתוך recalcForMatch.
+async function settleReviewRewardsForMatch(matchId) {
+  const reviews = await db.query(
+    "SELECT id, user_id, match_id, coins_awarded FROM match_reviews WHERE match_id = ? AND status = 'published'",
+    [matchId]
+  );
+  for (const r of reviews) await settleReviewReward(r);
+}
+
 async function coinLeaderboard() {
   const rows = await db.query(`
     SELECT u.id, u.name, u.profile_image_url,
@@ -154,6 +203,8 @@ module.exports = {
   adjust,
   outcomeOf,
   settleCoinBetsForMatch,
+  settleReviewReward,
+  settleReviewRewardsForMatch,
   coinLeaderboard,
   userCoinStats
 };

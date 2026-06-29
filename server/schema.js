@@ -258,6 +258,7 @@ module.exports = [
     pred_home          INT             NULL,
     pred_away          INT             NULL,
     status             ENUM('draft','published') NOT NULL DEFAULT 'published',
+    coins_awarded      INT             NOT NULL DEFAULT 0,
     created_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_match_reviews_user_match (user_id, match_id),
@@ -314,6 +315,18 @@ module.exports = [
     INDEX idx_coin_tx_user (user_id),
     INDEX idx_coin_tx_bet (bet_id),
     CONSTRAINT fk_coin_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // הצבעות על ריביו (שמעתי/אהבתי) — מזכות את הכותב במטבעות
+  `CREATE TABLE IF NOT EXISTS review_votes (
+    id            INT          AUTO_INCREMENT PRIMARY KEY,
+    review_id     INT          NOT NULL,
+    voter_user_id INT          NOT NULL,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_review_vote (review_id, voter_user_id),
+    INDEX idx_review_vote_review (review_id),
+    CONSTRAINT fk_review_vote_review FOREIGN KEY (review_id)     REFERENCES match_reviews(id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_vote_user   FOREIGN KEY (voter_user_id) REFERENCES users(id)         ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 ];

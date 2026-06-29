@@ -1966,6 +1966,17 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 }
 .review-attach { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); margin-top: 4px; cursor: pointer; }
 .my-reviews-list { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.review-vote-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.review-vote-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px; font-size: 13px; color: var(--ink); cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.review-vote-btn:hover { background: var(--paper-pure); border-color: var(--pitch); }
+.review-vote-btn.voted { background: rgba(220,38,38,0.1); border-color: var(--crimson); color: var(--crimson); font-weight: 600; }
+.review-vote-count { font-size: 13px; color: var(--muted); }
+.review-coins-earned { font-size: 13px; font-weight: 700; color: var(--gold-deep, var(--gold)); }
 
 /* ─────────── הימורי מטבעות ("שיחים") ─────────── */
 .coin-wallet-banner {
