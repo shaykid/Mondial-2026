@@ -125,6 +125,19 @@ export default function Predictions() {
     }).catch(() => {});
   };
 
+  // שלבים שעדיין יש בהם משחק שטרם שוחק — שלבים שהסתיימו לגמרי מוסתרים כברירת מחדל
+  const visibleStages = useMemo(
+    () => MATCH_STAGES.filter(s => matches.some(m => m.stage === s.key && m.status !== 'finished')),
+    [matches]
+  );
+  // אם הטאב הנוכחי הוא שלב שכבר הסתיים לגמרי — עבור לשלב הפעיל הראשון
+  useEffect(() => {
+    if (!matches.length) return;
+    if (tab !== 'all' && tab !== 'special' && !visibleStages.some(s => s.key === tab)) {
+      setTab(visibleStages[0]?.key || 'all');
+    }
+  }, [matches]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onChange = (matchId, side, value) => {
     const cleaned = String(value ?? '').replace(/[^\d]/g, '');
     setPredictions(prev => ({
@@ -345,7 +358,7 @@ export default function Predictions() {
       <div className="predictions-toolbar">
         <div className="tabs">
           <button className={`tab ${tab==='all'?'active':''}`} onClick={() => setTab('all')}>{t('stages.all')}</button>
-          {MATCH_STAGES.map((stage) => (
+          {visibleStages.map((stage) => (
             <button
               key={stage.key}
               className={`tab ${tab===stage.key?'active':''}`}

@@ -158,6 +158,17 @@ cron.schedule('0 */2 * * *', () => {
   }
 });
 
+// ניחושי AI יומיים (05:00 שעון ישראל): מייצר ניחושים למשחקים החסרים ב-48 השעות הקרובות / 5 הקרובים
+cron.schedule('0 5 * * *', () => {
+  const now = new Date();
+  if (now >= new Date('2026-06-08') && now <= new Date('2026-07-20')) {
+    console.log('⏰ ייצור ניחושי AI יומי...');
+    require('./services/aiPredictions').generateDaily()
+      .then(r => console.log('   ✓ ניחושי AI:', JSON.stringify(r)))
+      .catch(e => console.error('   ✗ ניחושי AI נכשלו:', e.message));
+  }
+}, { timezone: 'Asia/Jerusalem' });
+
 // דוחות אימייל מתוזמנים: מנהל ב-06:00 ומשתמשים בשעה שהוגדרה בהגדרות
 cron.schedule('* * * * *', () => {
   runScheduledEmailJobs().catch((e) => console.error('   ✗ דוחות מתוזמנים נכשלו:', e.message));

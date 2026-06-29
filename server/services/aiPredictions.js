@@ -203,4 +203,14 @@ async function getAllActive() {
   return byMatch;
 }
 
-module.exports = { generateForNextMatches, getAllActive };
+// ריצה יומית: ניחושים לכל המשחקים ב-48 השעות הקרובות (לכל הפחות 5 הקרובים), דילוג על קיימים
+async function generateDaily() {
+  if (!process.env.OPENAI_API_KEY) return { ok: false, note: 'no api key' };
+  const row = await db.one(
+    "SELECT COUNT(*) AS n FROM matches WHERE status <> 'finished' AND kickoff >= UTC_TIMESTAMP() AND kickoff <= (UTC_TIMESTAMP() + INTERVAL 2 DAY)"
+  );
+  const limit = Math.max(5, Number(row?.n || 0));
+  return generateForNextMatches(limit, false);
+}
+
+module.exports = { generateForNextMatches, generateDaily, getAllActive };
