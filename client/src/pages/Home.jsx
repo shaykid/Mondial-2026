@@ -15,7 +15,8 @@ export default function Home() {
   const [matches, setMatches] = useState([]);
   const [myPredictions, setMyPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [coinBalance, setCoinBalance] = useState(null);
+  const [coinStats, setCoinStats] = useState(null);
+  const [coinBoard, setCoinBoard] = useState([]);
   const [editingMatchId, setEditingMatchId] = useState(null);
   const [draft, setDraft] = useState({ home: '', away: '' });
   const [saving, setSaving] = useState(false);
@@ -25,8 +26,19 @@ export default function Home() {
     api.get('/matches').then(r => setMatches(r.data)).catch(() => {});
     api.get('/predictions/my').then(r => setMyPredictions(r.data.predictions)).catch(() => {});
     api.get('/leaderboard').then(r => setLeaderboard(r.data)).catch(() => {});
-    if (!user.isGuest) api.get('/coin-bets/wallet').then(r => setCoinBalance(r.data.balance)).catch(() => {});
+    if (!user.isGuest) {
+      api.get('/coin-bets/stats').then(r => setCoinStats(r.data)).catch(() => {});
+      api.get('/coin-bets/leaderboard').then(r => setCoinBoard((r.data || []).slice(0, 5))).catch(() => {});
+    }
   }, []);
+
+  const toggleChallengeOpen = async () => {
+    if (!coinStats) return;
+    const next = !coinStats.challenge_open;
+    setCoinStats(s => ({ ...s, challenge_open: next }));
+    try { await api.post('/coin-bets/challenge-visibility', { open: next }); }
+    catch { setCoinStats(s => ({ ...s, challenge_open: !next })); }
+  };
 
   const upcoming = matches
     .filter(m => m.status !== 'finished')
@@ -113,13 +125,32 @@ export default function Home() {
           <div className="label">{t('home.exact_hits')}</div>
           <div className="value" style={{color:'var(--gold-deep)'}}>{myRank?.exact_hits ?? 0}</div>
         </div>
-        {coinBalance != null && (
+        {coinStats && (
           <Link to="/coin-bets" className="stat-card" style={{ textDecoration: 'none' }}>
             <div className="label">{t('coin.balance')}</div>
-            <div className="value" style={{color:'var(--gold)'}}><CoinIcon size={15} /> {coinBalance.toLocaleString()}</div>
+            <div className="value" style={{color:'var(--gold)'}}><CoinIcon size={16} /> {coinStats.balance.toLocaleString()}</div>
+            <div className="stat-sub" style={{ color: coinStats.last_day_net >= 0 ? 'var(--pitch)' : 'var(--crimson)' }}>
+              {coinStats.last_day_net >= 0 ? '+' : ''}{coinStats.last_day_net.toLocaleString()} {t('coin.last_day')}
+            </div>
           </Link>
         )}
       </div>
+
+      {coinStats && (
+        <div className="challenge-open-bar">
+          <div>
+            <strong>{t('coin.challenge_open_title')}</strong>
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>{t('coin.challenge_open_help')}</div>
+          </div>
+          <button
+            type="button"
+            className={`toggle-pill ${coinStats.challenge_open ? 'on' : ''}`}
+            onClick={toggleChallengeOpen}
+          >
+            {coinStats.challenge_open ? t('coin.open_yes') : t('coin.open_no')}
+          </button>
+        </div>
+      )}
 
       <div className="section-divider">
         <h2>{t('home.next_matches')}</h2>
@@ -228,6 +259,35 @@ export default function Home() {
                   </td>
                   <td style={{fontWeight: 600}}>{r.name}</td>
                   <td style={{textAlign:'end'}}><span className="total-pts">{r.total_points}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {coinBoard.length > 0 && (
+        <>
+          <div className="section-divider">
+            <h2><CoinIcon size={20} /> {t('coin.top5_coins')}</h2>
+            <span className="badge">שיחים</span>
+          </div>
+          <table className="leaderboard-table">
+            <thead>
+              <tr>
+                <th style={{width: 80}}>{t('home.place')}</th>
+                <th>{t('home.player')}</th>
+                <th style={{width: 120, textAlign:'end'}}>{t('coin.balance')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {coinBoard.map(r => (
+                <tr key={r.id} className={r.rank <= 3 ? `top-${r.rank}` : ''}>
+                  <td>
+                    <span className={`rank-medal ${r.rank===1?'gold':r.rank===2?'silver':r.rank===3?'bronze':''}`}>{r.rank}</span>
+                  </td>
+                  <td style={{fontWeight: 600}}>{r.name}</td>
+                  <td style={{textAlign:'end', color:'var(--gold-deep)', fontWeight:700}}>{r.balance.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

@@ -2,7 +2,7 @@
 const express = require('express');
 const db = require('../db');
 const { auth } = require('../middleware/auth');
-const { ensureWallet, adjust, coinLeaderboard, userCoinStats, START_BALANCE } = require('../services/coins');
+const { ensureWallet, adjust, coinLeaderboard, userCoinStats, setChallengeOpen, START_BALANCE } = require('../services/coins');
 
 const router = express.Router();
 
@@ -33,9 +33,22 @@ function blockGuest(req, res) {
 router.get('/wallet', auth(), async (req, res) => {
   try {
     const balance = await ensureWallet(req.user.id);
-    res.json({ balance, start_balance: START_BALANCE });
+    const w = await db.one('SELECT challenge_open FROM coin_wallets WHERE user_id = ?', [req.user.id]);
+    res.json({ balance, start_balance: START_BALANCE, challenge_open: !!(w && w.challenge_open) });
   } catch (e) {
     console.error('coins/wallet:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// פתוח/סגור לאתגרי ניחוש
+router.post('/challenge-visibility', auth(), async (req, res) => {
+  try {
+    if (req.user.isGuest) return res.status(403).json({ error: 'אורחים אינם יכולים' });
+    await setChallengeOpen(req.user.id, !!req.body?.open);
+    res.json({ ok: true, challenge_open: !!req.body?.open });
+  } catch (e) {
+    console.error('coins/challenge-visibility:', e);
     res.status(500).json({ error: 'שגיאת שרת' });
   }
 });

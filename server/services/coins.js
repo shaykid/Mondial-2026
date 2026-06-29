@@ -170,8 +170,19 @@ async function coinLeaderboard() {
   return rows;
 }
 
+// קובע אם המשתמש גלוי לאתגרי ניחוש
+async function setChallengeOpen(userId, open) {
+  await ensureWallet(userId);
+  await db.run('UPDATE coin_wallets SET challenge_open = ? WHERE user_id = ?', [open ? 1 : 0, userId]);
+}
+
 async function userCoinStats(userId) {
   const balance = await ensureWallet(userId);
+  const wallet = await db.one('SELECT challenge_open FROM coin_wallets WHERE user_id = ?', [userId]);
+  const dayRow = await db.one(
+    "SELECT COALESCE(SUM(amount),0) AS net FROM coin_transactions WHERE user_id = ? AND created_at >= (NOW() - INTERVAL 1 DAY)",
+    [userId]
+  );
   const agg = await db.one(`
     SELECT
       SUM(CASE WHEN status = 'settled' THEN 1 ELSE 0 END) AS settled,
@@ -187,6 +198,8 @@ async function userCoinStats(userId) {
 
   return {
     balance,
+    challenge_open: !!(wallet && wallet.challenge_open),
+    last_day_net: Number(dayRow?.net || 0),
     rank: me ? me.rank : null,
     players_count: board.length,
     bets_settled: Number(agg?.settled || 0),
@@ -201,6 +214,7 @@ module.exports = {
   START_BALANCE,
   ensureWallet,
   adjust,
+  setChallengeOpen,
   outcomeOf,
   settleCoinBetsForMatch,
   settleReviewReward,

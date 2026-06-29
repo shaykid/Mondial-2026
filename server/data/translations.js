@@ -371,6 +371,12 @@ const translations = {
   'coin.win_rate': { he: 'אחוז הצלחה', en: 'Win rate', ar: 'نسبة الفوز' },
   'coin.all_bets': { he: 'כל הניחושים שלי', en: 'All my bets', ar: 'كل رهاناتي' },
   'coin.market_result': { he: 'תוצאת משחק (1·X·2)', en: 'Match result (1·X·2)', ar: 'نتيجة المباراة (1·X·2)' },
+  'coin.last_day': { he: 'ב-24 שעות', en: 'in 24h', ar: 'خلال 24 ساعة' },
+  'coin.top5_coins': { he: 'טופ 5 בשיחים', en: 'Top 5 by Coins', ar: 'أفضل 5 بالعملات' },
+  'coin.challenge_open_title': { he: 'פתוח לאתגרי ניחוש', en: 'Open to challenges', ar: 'متاح للتحديات' },
+  'coin.challenge_open_help': { he: 'כשהאפשרות פעילה — משתמשים אחרים יכולים לאתגר אותך לניחוש', en: 'When on, other users can challenge you to a bet', ar: 'عند التفعيل، يمكن للآخرين تحديك' },
+  'coin.open_yes': { he: '✓ פתוח', en: '✓ Open', ar: '✓ مفتوح' },
+  'coin.open_no': { he: 'סגור', en: 'Closed', ar: 'مغلق' },
 
   // ────────── סטטיסטיקות פרופיל + באנר ──────────
   'profile.stats_title': { he: 'הסטטיסטיקות שלי', en: 'My Statistics', ar: 'إحصائياتي' },

@@ -271,8 +271,9 @@ module.exports = [
   // ────────── הימורי מטבעות ("שיחים") ──────────
   // ארנק מטבעות לכל משתמש (יתרת פתיחה 10,000)
   `CREATE TABLE IF NOT EXISTS coin_wallets (
-    user_id    INT          NOT NULL PRIMARY KEY,
-    balance    INT          NOT NULL DEFAULT 10000,
+    user_id        INT      NOT NULL PRIMARY KEY,
+    balance        INT      NOT NULL DEFAULT 10000,
+    challenge_open TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_coin_wallets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

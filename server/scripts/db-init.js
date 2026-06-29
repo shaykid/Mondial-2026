@@ -145,6 +145,10 @@ async function main() {
   await addColumnIfMissing('match_reviews', 'coins_awarded',
     'ALTER TABLE match_reviews ADD COLUMN coins_awarded INT NOT NULL DEFAULT 0 AFTER status');
 
+  // "פתוח לאתגרי ניחוש" — האם המשתמש גלוי לאתגור ע"י אחרים
+  await addColumnIfMissing('coin_wallets', 'challenge_open',
+    'ALTER TABLE coin_wallets ADD COLUMN challenge_open TINYINT(1) NOT NULL DEFAULT 0 AFTER balance');
+
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 
