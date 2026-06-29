@@ -5,6 +5,7 @@ import Flag from '../components/Flag';
 import ScoreText from '../components/ScoreText';
 import MatchReviewRecorder from '../components/MatchReviewRecorder';
 import MatchReviews from '../components/MatchReviews';
+import MatchPredictionButtons from '../components/MatchPredictionButtons';
 import { useTranslation } from '../i18n/TranslationContext';
 import { useAuth } from '../context/AuthContext';
 import { ilDate, ilTime, ilMs, ilDayKey, parseScheduleLockMs } from '../utils/time';
@@ -55,6 +56,7 @@ export default function Predictions() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [predictions, setPredictions] = useState({});  // matchId -> {home, away, points, locked, saved}
+  const [aiPredictions, setAiPredictions] = useState({}); // matchId -> {sources, consensus}
   const [special, setSpecial] = useState({ champion_code: '', runner_up_code: '', top_scorer: '' });
   const [specialLocked, setSpecialLocked] = useState(false);
   const [specialLockLabel, setSpecialLockLabel] = useState('');
@@ -107,6 +109,7 @@ export default function Predictions() {
       if (p.data.special) setSpecial(p.data.special);
       setSpecialDirty(false);
     });
+    api.get('/ai-predictions').then(r => setAiPredictions(r.data || {})).catch(() => {});
   }, []);
 
   const onChange = (matchId, side, value) => {
@@ -472,6 +475,7 @@ export default function Predictions() {
                       </div>
                     )}
                   </div>
+                  <MatchPredictionButtons data={aiPredictions[m.id]} />
                   {!isGuest && <MatchReviews matchId={m.id} bump={reviewBump[m.id] || 0} />}
                  </div>
                 );

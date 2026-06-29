@@ -1639,6 +1639,22 @@ router.post('/scrape-now', async (req, res) => {
   }
 });
 
+// ייצור ניחושי AI ל-5 המשחקים הקרובים (מחקר רשת חי לפי הפרומפט)
+router.post('/ai-predictions/generate', async (req, res) => {
+  try {
+    const { generateForNextMatches } = require('../services/aiPredictions');
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 10);
+    const result = await generateForNextMatches(limit);
+    res.json(result);
+  } catch (e) {
+    console.error('admin/ai-predictions:', e);
+    const msg = e.code === 'NO_API_KEY' ? 'חסר OPENAI_API_KEY בשרת'
+      : e.code === 'BAD_JSON' ? 'ה-AI לא החזיר תשובה תקינה — נסה שוב'
+      : e.code === 'OPENAI_ERROR' ? `שגיאת OpenAI: ${e.message}` : 'שגיאת שרת';
+    res.status(500).json({ error: msg });
+  }
+});
+
 // סריקת משחקים זמינים מה-web והוספתם למסד הנתונים
 router.post('/scan-fixtures-now', async (req, res) => {
   try {

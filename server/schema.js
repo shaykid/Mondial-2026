@@ -328,6 +328,31 @@ module.exports = [
     INDEX idx_review_vote_review (review_id),
     CONSTRAINT fk_review_vote_review FOREIGN KEY (review_id)     REFERENCES match_reviews(id) ON DELETE CASCADE,
     CONSTRAINT fk_review_vote_user   FOREIGN KEY (voter_user_id) REFERENCES users(id)         ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // ───────── ניחושי AI ממקורות מחקר (משחקים 5 הקרובים) ─────────
+  `CREATE TABLE IF NOT EXISTS match_ai_predictions (
+    id              INT          AUTO_INCREMENT PRIMARY KEY,
+    match_id        INT          NOT NULL,
+    slot            TINYINT      NOT NULL DEFAULT 0,
+    source_name     VARCHAR(160) NOT NULL,
+    source_url      VARCHAR(500) NULL,
+    prediction_type ENUM('exact_score','betting_tip','probability_model','editorial_opinion') NOT NULL DEFAULT 'editorial_opinion',
+    prediction      TEXT         NULL,
+    notes           TEXT         NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ai_pred_match (match_id),
+    CONSTRAINT fk_ai_pred_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  `CREATE TABLE IF NOT EXISTS match_ai_consensus (
+    match_id        INT          NOT NULL PRIMARY KEY,
+    most_common     VARCHAR(160) NULL,
+    suggested_score VARCHAR(40)  NULL,
+    confidence      ENUM('low','medium','high') NULL,
+    explanation     TEXT         NULL,
+    generated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_cons_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 ];

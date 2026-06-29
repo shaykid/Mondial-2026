@@ -2587,6 +2587,21 @@ function ActionsTab() {
       />
 
       <ActionCard
+        title="צור ניחושי AI ל-5 המשחקים הקרובים"
+        desc="מריץ מחקר רשת חי (OpenAI) ומפיק עד 4 ניחושי מקורות לכל אחד מ-5 המשחקים הקרובים. הניחושים יוצגו ככפתורים מתחת לכל משחק. עשוי לקחת עד דקה."
+        btnLabel="הפק ניחושי מומחים"
+        loading={busy === 'ai-pred'}
+        onClick={async () => {
+          setErr(''); setOk(''); setBusy('ai-pred');
+          try {
+            const r = await api.post('/admin/ai-predictions/generate', { limit: 5 }, { timeout: 180000 });
+            setOk(`ניחושי AI הופקו: ${r.data.matches} משחקים, ${r.data.sources || 0} מקורות`);
+          } catch (e) { setErr(errMsg(e)); } finally { setBusy(null); }
+        }}
+        variant="gold"
+      />
+
+      <ActionCard
         title="חישוב נקודות מחדש"
         desc="מחשב מחדש את הנקודות לכל הניחושים על סמך התוצאות הסופיות וההגדרות הנוכחיות. הרץ פעולה זו לאחר שינוי משקלי הניקוד או הגדרת אלופה/סגן/מלך שערים."
         btnLabel="חשב מחדש את כל הנקודות"

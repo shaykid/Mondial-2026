@@ -1,8 +1,19 @@
 // נתיבי משחקים, קבוצות וטבלאות (async/MySQL)
 const express = require('express');
 const db = require('../db');
+const { getAllActive } = require('../services/aiPredictions');
 
 const router = express.Router();
+
+// ניחושי AI ממקורות מחקר (לכל המשחקים הקרובים שיש להם נתונים)
+router.get('/ai-predictions', async (req, res) => {
+  try {
+    res.json(await getAllActive());
+  } catch (e) {
+    console.error('ai-predictions:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
 
 // קבוצות
 router.get('/teams', async (req, res) => {

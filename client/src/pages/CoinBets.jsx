@@ -10,6 +10,22 @@ import { getMatchTeamName } from '../lib/match-utils';
 
 const PROPS = ['home', 'draw', 'away'];
 
+function flagEmojiFromCode(code) {
+  if (!code) return '🏳️';
+  const c = String(code).toLowerCase();
+  if (['gb-eng', 'gb-sct', 'gb-wls', 'gb-nir'].includes(c)) return '🏴';
+  const base = c.slice(0, 2);
+  if (!/^[a-z]{2}$/.test(base)) return '🏳️';
+  const A = 0x1F1E6;
+  return String.fromCodePoint(A + base.charCodeAt(0) - 97, A + base.charCodeAt(1) - 97);
+}
+
+// משפט טבעי: "מנחש ש{קבוצה} ינצחו" / "...לא ינצחו" / "מנחש שיהיה תיקו" / "...שלא יהיה תיקו"
+function guessPhrase(t, propLabel, m, prop, negate) {
+  if (prop === 'draw') return t(negate ? 'coin.guess_not_draw' : 'coin.guess_draw');
+  return t(negate ? 'coin.guess_not_win' : 'coin.guess_win', { team: propLabel(m, prop) });
+}
+
 export default function CoinBets() {
   const { user } = useAuth();
   const { t, locale, pickText } = useTranslation();
@@ -110,13 +126,13 @@ function OpenBoard({ open, propLabel, onAccept, locale, t }) {
             <div className="coin-card-body">
               <div>
                 <span className="coin-creator">{b.creator_name}</span>
-                <span className="coin-prop"> {t('coin.backs')} <strong>{propLabel(m, b.proposition)}</strong></span>
+                <span className="coin-prop"> {guessPhrase(t, propLabel, m, b.proposition, false)}</span>
                 {b.target_user_id && <span className="coin-challenge-tag"> {t('coin.direct_challenge')}</span>}
               </div>
               <div className="coin-stake"><CoinIcon size={15} /> {b.stake.toLocaleString()}</div>
             </div>
             <div className="coin-card-foot">
-              <span className="coin-you-take">{t('coin.you_take')}: <strong>{t('coin.not_x', { x: propLabel(m, b.proposition) })}</strong></span>
+              <span className="coin-you-take">{t('coin.you')} <strong>{guessPhrase(t, propLabel, m, b.proposition, true)}</strong></span>
               <button className="btn btn-sm btn-gold" onClick={() => onAccept(b)}>{t('coin.accept')} (<CoinIcon size={15} /> {b.stake.toLocaleString()})</button>
             </div>
           </div>
@@ -144,9 +160,7 @@ function MyBets({ mine, matchById, propLabel, userId, onCancel, locale, t }) {
             <MatchLine m={b} locale={locale} />
             <div className="coin-card-body">
               <div>
-                {iAmCreator
-                  ? <span>{t('coin.you_back')} <strong>{propLabel(b, b.proposition)}</strong></span>
-                  : <span>{t('coin.you_take')} <strong>{t('coin.not_x', { x: propLabel(b, b.proposition) })}</strong></span>}
+                <span>{t('coin.you')} <strong>{guessPhrase(t, propLabel, b, b.proposition, !iAmCreator)}</strong></span>
                 <div className="coin-vs-who">
                   {b.opponent_id
                     ? <>{t('coin.vs')} {iAmCreator ? b.opponent_name : b.creator_name}</>
@@ -220,7 +234,7 @@ function CreateBet({ matches, propLabel, wallet, onCreated, locale, t }) {
           <option value="">{t('coin.pick_match')}</option>
           {openMatches.map(m => (
             <option key={m.id} value={m.id}>
-              {m.home_code?.toUpperCase()}–{m.away_code?.toUpperCase()} · {ilDate(m.kickoff, locale, { day: '2-digit', month: '2-digit' })} {ilTime(m.kickoff, locale, { hour: '2-digit', minute: '2-digit' })}
+              {flagEmojiFromCode(m.home_code)} {propLabel(m, 'home')} – {flagEmojiFromCode(m.away_code)} {propLabel(m, 'away')} · {ilDate(m.kickoff, locale, { day: '2-digit', month: '2-digit' })} {ilTime(m.kickoff, locale, { hour: '2-digit', minute: '2-digit' })}
             </option>
           ))}
         </select>
@@ -239,6 +253,7 @@ function CreateBet({ matches, propLabel, wallet, onCreated, locale, t }) {
               </button>
             ))}
           </div>
+          <div className="coin-pick-preview">{t('coin.you')} <strong>{guessPhrase(t, propLabel, selected, proposition, false)}</strong></div>
         </div>
       )}
 
