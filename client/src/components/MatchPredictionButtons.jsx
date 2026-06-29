@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from '../i18n/TranslationContext';
 import PredictorIcon from './PredictorIcon';
 
@@ -16,10 +16,12 @@ export default function MatchPredictionButtons({ data, reviews }) {
   const sources = (data && data.sources) || [];
   const consensus = data && data.consensus;
   const revs = reviews || [];
+  // ריביו פנימי אחד אקראי (אם קיים) לצד 3-4 המקורות החיצוניים
+  const review = useMemo(() => (revs.length ? revs[Math.floor(Math.random() * revs.length)] : null), [revs.length]);
   const slots = [0, 1, 2, 3];
 
   const typeLabel = (ty) => t(`aipred.type_${ty || 'editorial_opinion'}`);
-  const cur = open && (open.kind === 'ai' ? sources[open.i] : revs[open.i]);
+  const cur = open && (open.kind === 'ai' ? sources[open.i] : review);
 
   return (
     <div className="aipred-bar" dir="rtl">
@@ -44,14 +46,14 @@ export default function MatchPredictionButtons({ data, reviews }) {
           );
         })}
 
-        {/* ריביוים של חברי האתר — אווטאר המבקר */}
-        {revs.map((r, i) => (
-          <button key={`r${r.id}`} type="button" className="aipred-chip review-chip" onClick={() => setOpen({ kind: 'review', i })} title={r.user_name}>
-            {r.profile_image_url
-              ? <img className="aipred-logo" src={r.profile_image_url} alt={r.user_name} />
-              : <span className="aipred-avatar-fallback">{(r.user_name || '?').slice(0, 1)}</span>}
+        {/* ריביו פנימי אחד (אקראי) — אווטאר המבקר */}
+        {review && (
+          <button type="button" className="aipred-chip review-chip" onClick={() => setOpen({ kind: 'review' })} title={review.user_name}>
+            {review.profile_image_url
+              ? <img className="aipred-logo" src={review.profile_image_url} alt={review.user_name} />
+              : <span className="aipred-avatar-fallback">{(review.user_name || '?').slice(0, 1)}</span>}
           </button>
-        ))}
+        )}
       </div>
 
       {cur && open.kind === 'ai' && (

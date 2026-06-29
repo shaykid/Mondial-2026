@@ -82,7 +82,7 @@ export function AuthProvider({ children }) {
     if (profile_image_file) form.append('profile_image', profile_image_file);
     const { data } = await api.post('/auth/profile', form);
     if (data?.user) setUser(data.user);
-    return data?.user || null;
+    return data || null;
   };
 
   return (

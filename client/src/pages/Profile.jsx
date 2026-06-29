@@ -79,8 +79,8 @@ export default function Profile() {
     setProfileMsg('');
     setProfileBusy(true);
     try {
-      await updateProfile({ profile_image_file: profileImageFile, phone_number: phoneDraft, preferred_language: languageDraft });
-      setProfileMsg(t('profile.saved'));
+      const res = await updateProfile({ profile_image_file: profileImageFile, phone_number: phoneDraft, preferred_language: languageDraft });
+      setProfileMsg(res?.pic_bonus ? t('profile.pic_bonus_granted') : t('profile.saved'));
       setProfileImageFile(null);
     } catch (e) {
       setProfileMsg(errMsg(e, t('profile.save_error')));
@@ -114,6 +114,9 @@ export default function Profile() {
           <p style={{ color: 'var(--muted)', marginTop: 8 }}>
             {t('profile.profile_help')}
           </p>
+          {!user?.profile_image_url && !user?.isGuest && (
+            <p className="pic-bonus-note">🎁 {t('profile.pic_bonus_note')}</p>
+          )}
 
           <div style={{margin: '12px 0'}}>
             {(profilePreviewUrl || user?.profile_image_url) ? (

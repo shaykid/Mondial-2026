@@ -1904,6 +1904,12 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
 }
 .review-rec-btn:hover:not(:disabled) { transform: translateY(-1px); background: rgba(56, 189, 248, 0.7); }
+/* קריאה לפעולה בתכלת חצי-שקוף ליד כפתור ההקלטה */
+.review-rec-cta {
+  display: block; text-align: center; margin: 0 auto 4px;
+  font-size: 10.5px; font-weight: 700; line-height: 1.1; max-width: 80px;
+  color: rgba(14, 116, 165, 0.6);
+}
 .review-rec-btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
 .review-rec-btn.recording {
   background: rgba(220, 38, 38, 0.85);
@@ -2109,4 +2115,5 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 .aipred-consensus { margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee; font-size: 14px; line-height: 1.7; }
 .aipred-expl { color: var(--muted, #777); margin-top: 4px; }
 
+.pic-bonus-note { margin-top: 6px; color: var(--gold-deep, #b8860b); font-weight: 700; font-size: 13px; }
 .coin-pick-preview { margin-top: 8px; font-size: 14px; color: var(--pitch, #2a7); background: rgba(42,170,119,.08); padding: 6px 10px; border-radius: 8px; }

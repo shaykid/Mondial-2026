@@ -91,6 +91,7 @@ export default function MatchReviewRecorder({ matchId, disabled, onPublished }) 
           ? <span className="spinner" />
           : <span className="review-rec-ico" aria-hidden="true">{state === 'recording' ? '■' : '🎙️'}</span>}
       </button>
+      {state === 'idle' && !disabled && <span className="review-rec-cta" aria-hidden="true">{t('reviews.publish_cta')}</span>}
       {err && <span className="review-rec-err">{err}</span>}
 
       {modal && (
