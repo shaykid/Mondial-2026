@@ -1,13 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../i18n/TranslationContext';
-import { useTheme } from '../context/ThemeContext';
 import LanguageSelector from './LanguageSelector';
 
 export default function Header() {
   const { user, logout, coinsEnabled } = useAuth();
   const { t } = useTranslation();
-  const { assets } = useTheme();
   const nav = useNavigate();
 
   const doLogout = () => { logout(); nav('/login'); };
@@ -22,8 +20,8 @@ export default function Header() {
         </div>
 
         <div className="header-right-brand">
-          {coinsEnabled && <span className="header-brand-name">שיח-מרקט</span>}
-          <img className="header-logo-large" src={assets.logo || '/shiah-logo-white.png'} alt="logo" />
+          {coinsEnabled && <span className="header-brand-name">הינביט-מרקט</span>}
+          <img className="header-logo-large" src="/theme-assets/logo-header.png" alt="Hinbit logo" />
           {user?.profile_image_url ? (
             <img className="header-avatar" src={user.profile_image_url} alt={user.name} />
           ) : (

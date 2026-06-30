@@ -277,7 +277,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 }
 
 .header-logo-large {
-  height: 70px;
+  height: 54px;
   width: auto;
   object-fit: contain;
 }
@@ -1314,7 +1314,7 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   .login-page { grid-template-columns: 1fr; }
   .login-hero { display: none; }
   .header-logo-large {
-    height: 55px;
+    height: 42px;
   }
   .login-top-logo {
     height: 46px;
