@@ -5,10 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import CoinIcon from './CoinIcon';
 import { useTranslation } from '../i18n/TranslationContext';
 import { ilDate } from '../utils/time';
+import { getMatchTeamName } from '../lib/match-utils';
 
 // פאנל אישי: יתרת שיחים + סטטיסטיקות + כל ההימורים של המשתמש (לפי סוג וסטטוס)
 export default function MyCoinsPanel() {
-  const { t, locale } = useTranslation();
+  const { t, locale, pickText } = useTranslation();
   const { user } = useAuth();
   const [wallet, setWallet] = useState(null);
   const [stats, setStats] = useState(null);
@@ -24,8 +25,7 @@ export default function MyCoinsPanel() {
   const marketLabel = (m) => t(`coin.market_${m || 'result'}`);
   const propLabel = (b) => {
     if (b.proposition === 'draw') return t('coin.draw');
-    const code = b.proposition === 'home' ? b.home_code : b.away_code;
-    return (code || '').toUpperCase();
+    return getMatchTeamName(b, b.proposition === 'home' ? 'home' : 'away', pickText).name;
   };
   const statusLabel = {
     open: t('coin.status_open'), matched: t('coin.status_matched'),
@@ -70,7 +70,7 @@ export default function MyCoinsPanel() {
                 <div className="my-coins-bet-row">
                   <span className="coin-type-chip">{marketLabel(b.market)}</span>
                   <span className="my-coins-teams">
-                    {(b.home_code || '').toUpperCase()}–{(b.away_code || '').toUpperCase()}
+                    {getMatchTeamName(b, 'home', pickText).name}–{getMatchTeamName(b, 'away', pickText).name}
                   </span>
                   <span className="coin-match-when">{ilDate(b.kickoff, locale, { day: '2-digit', month: '2-digit' })}</span>
                 </div>
