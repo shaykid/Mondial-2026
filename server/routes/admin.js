@@ -1751,6 +1751,12 @@ router.delete('/simulate/:id', async (req, res) => {
   }
 });
 
+router.post('/simulate/bulk', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try { res.json(await simulate.bulkAction(req.body || {})); }
+  catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }
+});
+
 router.get('/simulate/:id/history', async (req, res) => {
   try { res.json(await simulate.history(req.params.id)); }
   catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }

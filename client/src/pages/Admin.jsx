@@ -80,6 +80,11 @@ function SimulateTab() {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [sel, setSel] = useState(() => new Set());
+  const [matches, setMatches] = useState([]);
+  const [betMatch, setBetMatch] = useState('');
+  const [betH, setBetH] = useState('');
+  const [betA, setBetA] = useState('');
 
   const load = async () => {
     try {
@@ -94,8 +99,28 @@ function SimulateTab() {
     catch (e) { setMsg(errMsg(e)); }
   };
 
+  const toggleSel = (id) => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allSelected = list.length > 0 && list.every(u => sel.has(u.user_id));
+  const selectAll = () => setSel(allSelected ? new Set() : new Set(list.map(u => u.user_id)));
+
+  const bulk = async (action, extra = {}) => {
+    const ids = [...sel];
+    if (!ids.length) { setMsg('לא נבחרו בוטים'); return; }
+    try {
+      const { data } = await api.post('/admin/simulate/bulk', { ids, action, ...extra });
+      setMsg(`✓ בוצע על ${data.affected} בוטים`);
+      load();
+    } catch (e) { setMsg(errMsg(e)); }
+  };
+  const bulkRebet = () => {
+    if (!betMatch) { setMsg('בחר משחק'); return; }
+    const hasScore = betH !== '' && betA !== '';
+    bulk('rebet', { matchId: Number(betMatch), ...(hasScore ? { home: Number(betH), away: Number(betA) } : {}) });
+  };
+
   useEffect(() => {
     api.get('/admin/simulate/strategies').then(r => setStrategies(r.data.strategies || [])).catch(() => {});
+    api.get('/matches').then(r => setMatches((r.data || []).filter(m => m.status !== 'finished'))).catch(() => {});
     load();
     const iv = setInterval(load, 4000); // טבלה חיה
     return () => clearInterval(iv);
@@ -130,7 +155,7 @@ function SimulateTab() {
       <div className="alert" style={{ background: 'var(--paper-dim)', marginBottom: 16 }}>
         יצירת משתמשים וירטואליים (בוטים) עם שם/טלפון/אימייל ואווטאר שנוצרים ב-AI, ניחושים לכל המשחקים,
         4-5 ריביוים, 20-30 לייקים (אהבתי) והצעות הימור לשחקנים אחרים — לפי אסטרטגיית הימור נבחרת.
-        <br /><small style={{ color: 'var(--muted)' }}>הבוטים מסומנים ולא מקבלים מיילים אמיתיים (דומיין @sim.local).</small>
+        <br /><small style={{ color: 'var(--muted)' }}>בוטים נוצרים <b>מושבתים כברירת מחדל</b> — סמנו אותם והפעילו. הם אינם מקבלים מיילים אמיתיים.</small>
       </div>
 
       <div style={{ display: 'grid', gap: 12, padding: 16, marginBottom: 20, background: 'var(--paper-pure)', border: '1px solid var(--paper-dim)', borderRadius: 12 }}>
@@ -170,18 +195,41 @@ function SimulateTab() {
         {msg && <div className={`alert ${msg.startsWith('✓') ? 'alert-success' : 'alert-error'}`}>{msg}</div>}
       </div>
 
-      <h3 style={{ margin: '8px 0' }}>בוטים פעילים ({list.length})</h3>
+      <h3 style={{ margin: '8px 0' }}>בוטים ({list.length}) · פעילים {list.filter(u => u.enabled).length}</h3>
+
+      {sel.size > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '10px 14px', marginBottom: 10, background: 'var(--paper-pure)', border: '1px solid var(--gold)', borderRadius: 10 }}>
+          <b>{sel.size} נבחרו</b>
+          <button className="btn btn-sm btn-pitch" onClick={() => bulk('enable')}>הפעל</button>
+          <button className="btn btn-sm btn-outline" onClick={() => bulk('disable')}>השבת</button>
+          <button className="btn btn-sm btn-outline" onClick={() => setSel(new Set())}>נקה בחירה</button>
+          <span style={{ borderInlineStart: '1px solid var(--paper-dim)', paddingInlineStart: 10, display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            שנה ניחוש למשחק:
+            <select value={betMatch} onChange={e => setBetMatch(e.target.value)} style={inputStyle(220)}>
+              <option value="">בחר משחק…</option>
+              {matches.map(m => <option key={m.id} value={m.id}>{(m.home_name || m.home_label_he || m.home_code)} – {(m.away_name || m.away_label_he || m.away_code)}</option>)}
+            </select>
+            <input type="number" min={0} max={30} placeholder="בית" value={betH} onChange={e => setBetH(e.target.value)} style={inputStyle(70)} />
+            <input type="number" min={0} max={30} placeholder="חוץ" value={betA} onChange={e => setBetA(e.target.value)} style={inputStyle(70)} />
+            <button className="btn btn-sm btn-gold" onClick={bulkRebet}>החל</button>
+            <small style={{ color: 'var(--muted)' }}>(ריק = לפי אסטרטגיה)</small>
+          </span>
+        </div>
+      )}
+
       <div style={{ overflowX: 'auto' }}>
         <table className="leaderboard-table">
           <thead>
             <tr>
+              <th style={{ width: 28 }}><input type="checkbox" checked={allSelected} onChange={selectAll} /></th>
               <th>שם</th><th>אסטרטגיה</th><th>טלפון</th><th>אימייל</th>
               <th>ניחושים</th><th>ריביוים</th><th>לייקים</th><th>הצעות</th><th>שיחים</th><th>סטטוס</th><th></th>
             </tr>
           </thead>
           <tbody>
             {list.map(u => (
-              <tr key={u.user_id} style={{ opacity: u.enabled ? 1 : 0.5 }}>
+              <tr key={u.user_id} style={{ opacity: u.enabled ? 1 : 0.55, background: sel.has(u.user_id) ? 'var(--paper-dim)' : undefined }}>
+                <td><input type="checkbox" checked={sel.has(u.user_id)} onChange={() => toggleSel(u.user_id)} /></td>
                 <td style={{ fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>
                   {u.profile_image_url
                     ? <img src={u.profile_image_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
@@ -206,7 +254,7 @@ function SimulateTab() {
                 </td>
               </tr>
             ))}
-            {list.length === 0 && <tr><td colSpan={11} style={{ color: 'var(--muted)' }}>אין עדיין בוטים — צור כמה למעלה.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={12} style={{ color: 'var(--muted)' }}>אין עדיין בוטים — צור כמה למעלה.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -232,7 +280,7 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
       setBot(r.data);
       setForm({
         name: r.data.name || '', phone_number: r.data.phone_number || '', email: r.data.email || '',
-        strategy: r.data.strategy, enabled: r.data.enabled,
+        strategy: r.data.strategy, enabled: r.data.enabled, email_as_name: !!r.data.persona?.email_as_name,
         bio: r.data.persona?.bio || '', style: r.data.persona?.style || '', avatar_hint: r.data.persona?.avatar_hint || ''
       });
       setImg(r.data.profile_image_url || '');
@@ -290,6 +338,9 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
             </label>
             <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
               <input type="checkbox" checked={!!form.enabled} onChange={e => upd('enabled', e.target.checked)} /> פעיל (מופיע בטבלה החיה)
+            </label>
+            <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!form.email_as_name} onChange={e => upd('email_as_name', e.target.checked)} /> השתמש באימייל כשם תצוגה
             </label>
           </div>
         </div>

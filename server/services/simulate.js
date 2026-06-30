@@ -31,9 +31,73 @@ const COOL_FIRST = ['Nixon','Rocky','Ace','Neo','Rio','Leo','Ziggy','Coby','Remy
 
 // בחירת מגדר לפי 60% נקבה / 40% זכר
 function pickGender() { return Math.random() < 0.6 ? 'female' : 'male'; }
+
+// מאגר שמות (נוצר ע"י AI פעם אחת ונשמר ב-settings). מבנה: {firsts:[{he,en,gender,origin}], lasts:[{he,en,origin}]}
+let INV = null;
+const INV_SETTING = 'sim_name_inventory';
+
+function buildFallbackInventory() {
+  const firsts = [];
+  for (const [he, en] of FIRST_F) firsts.push({ he, en, gender: 'female', origin: 'jewish' });
+  for (const [he, en] of FIRST_M) firsts.push({ he, en, gender: 'male', origin: 'jewish' });
+  const OTHER_F = [['נטשה', 'Natasha'], ['סבטלנה', 'Svetlana'], ['אנה', 'Anna'], ['אירינה', 'Irina'], ['ויקי', 'Viki'], ['ג\'ני', 'Jenny'], ['ליודה', 'Lyuda']];
+  const OTHER_M = [['איגור', 'Igor'], ['בוריס', 'Boris'], ['דימה', 'Dima'], ['ג\'קי', 'Jackie'], ['אלכס', 'Alex'], ['רומן', 'Roman'], ['ויטלי', 'Vitaly']];
+  for (const [he, en] of OTHER_F) firsts.push({ he, en, gender: 'female', origin: 'other' });
+  for (const [he, en] of OTHER_M) firsts.push({ he, en, gender: 'male', origin: 'other' });
+  const lasts = LAST.map(([he, en]) => ({ he, en, origin: 'jewish' }));
+  for (const [he, en] of [['סלבטנה', 'Slavetna'], ['פופוב', 'Popov'], ['איבנוב', 'Ivanov'], ['קסטרו', 'Castro'], ['אבוטבול', 'Abutbul']]) lasts.push({ he, en, origin: 'other' });
+  return { firsts, lasts };
+}
+
+async function generateInventoryAI() {
+  const ai = await chatJSON(
+    'אתה מחולל מאגר שמות ישראליים אמיתיים ומוכרים לסביבת בדיקה. החזר JSON בלבד.',
+    `צור מאגר שמות ישראליים: 50 שמות פרטיים (עם מגדר ומוצא) ו-50 שמות משפחה מוכרים.
+מתוכם כ-70% ממוצא יהודי-ישראלי קלאסי, וכ-20-30% ממוצא אחר (עולים/רוסי/לועזי כמו "ג'קי","איגור","נטשה","סלבטנה").
+החזר JSON: {"firsts":[{"he":"שם בעברית","en":"transliteration","gender":"male|female","origin":"jewish|other"}],"lasts":[{"he":"שם משפחה","en":"transliteration","origin":"jewish|other"}]}`
+  );
+  const clean = (s) => String(s || '').trim();
+  const en = (s) => clean(s).replace(/[^A-Za-z]/g, '');
+  if (!ai || !Array.isArray(ai.firsts) || !Array.isArray(ai.lasts)) return null;
+  const firsts = ai.firsts.map(x => ({ he: clean(x.he), en: en(x.en), gender: x.gender === 'female' ? 'female' : 'male', origin: x.origin === 'other' ? 'other' : 'jewish' })).filter(x => x.he && x.en);
+  const lasts = ai.lasts.map(x => ({ he: clean(x.he), en: en(x.en), origin: x.origin === 'other' ? 'other' : 'jewish' })).filter(x => x.he && x.en);
+  if (firsts.length < 12 || lasts.length < 12) return null;
+  return { firsts, lasts };
+}
+
+async function ensureInventory(force = false) {
+  if (INV && !force) return INV;
+  if (!force) {
+    try {
+      const row = await db.one('SELECT `value` FROM settings WHERE `key` = ?', [INV_SETTING]);
+      if (row && row.value) { const p = JSON.parse(row.value); if (p && p.firsts && p.firsts.length) { INV = p; return INV; } }
+    } catch (e) { /* */ }
+  }
+  const gen = await generateInventoryAI();
+  if (gen) {
+    INV = gen;
+    try { await db.run('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)', [INV_SETTING, JSON.stringify(gen)]); } catch (e) { /* */ }
+    return INV;
+  }
+  INV = buildFallbackInventory();
+  return INV;
+}
+
+// שם בוט: 70% יהודי / ~30% אחר, לפי המאגר (אם נטען); אחרת מאגר ברירת המחדל
 function pickName(gender) {
-  const fp = gender === 'female' ? FIRST_F : FIRST_M;
-  const [fHe, fEn] = pick(fp);
+  const inv = INV && INV.firsts && INV.firsts.length ? INV : null;
+  if (inv) {
+    const wantOrigin = Math.random() < 0.70 ? 'jewish' : 'other';
+    const byGender = inv.firsts.filter(f => f.gender === gender);
+    let fp = byGender.filter(f => f.origin === wantOrigin);
+    if (!fp.length) fp = byGender.length ? byGender : inv.firsts;
+    let lp = inv.lasts.filter(l => l.origin === wantOrigin);
+    if (!lp.length) lp = inv.lasts;
+    const f = pick(fp); const l = pick(lp);
+    return { name: `${f.he} ${l.he}`, first_en: f.en || 'Sim', last_en: l.en || 'Bot' };
+  }
+  const fpArr = gender === 'female' ? FIRST_F : FIRST_M;
+  const [fHe, fEn] = pick(fpArr);
   const [lHe, lEn] = pick(LAST);
   return { name: `${fHe} ${lHe}`, first_en: fEn, last_en: lEn };
 }
@@ -249,18 +313,23 @@ async function createOne(strategy, options) {
   let avatarUrl = null;
   if (options.avatar !== false) avatarUrl = await generateAvatar(persona);
 
+  // 30% מהבוטים — שם התצוגה הוא ה-handle של האימייל (במקום השם העברי). שומרים את השם העברי ב-he_name.
+  persona.he_name = persona.name;
+  persona.email_as_name = Math.random() < 0.30;
+  const displayName = persona.email_as_name ? email.split('@')[0] : persona.name;
+
   const ins = await db.run(
     `INSERT INTO users (email, name, phone_number, profile_image_url, password_hash, is_admin, is_guest, can_guess_groups)
      VALUES (?, ?, ?, ?, ?, 0, 0, 1)`,
-    [email, persona.name, phone, avatarUrl, passwordHash]
+    [email, displayName, phone, avatarUrl, passwordHash]
   );
   const userId = ins.insertId;
   await db.run(
-    'INSERT INTO sim_users (user_id, strategy, persona) VALUES (?, ?, ?)',
+    'INSERT INTO sim_users (user_id, strategy, persona, enabled) VALUES (?, ?, ?, 0)',
     [userId, strategy, JSON.stringify({ ...persona, phone, email })]
   );
 
-  const summary = { user_id: userId, name: persona.name, email, phone, strategy, predictions: 0, reviews: 0, likes: 0, suggestions: 0, avatar: !!avatarUrl };
+  const summary = { user_id: userId, name: displayName, email, phone, strategy, predictions: 0, reviews: 0, likes: 0, suggestions: 0, avatar: !!avatarUrl };
   const mode = STRATEGIES[strategy]?.score || 'uniform';
   const matches = await loadMatches();
 
@@ -345,6 +414,7 @@ async function createOne(strategy, options) {
 // ───────────── ריצת אצווה ברקע ─────────────
 async function runBatch({ count, strategy, options }) {
   await ensureSchema();
+  await ensureInventory().catch(() => {}); // טוען מאגר שמות (AI/מטמון) פעם אחת לפני האצווה
   state.running = true; state.total = count; state.done = 0; state.failed = 0;
   state.strategy = strategy; state.startedAt = new Date().toISOString(); state.lastError = null;
   for (let i = 0; i < count; i += 1) {
@@ -417,7 +487,8 @@ async function updateOne(userId, fields) {
   const cur = await db.one('SELECT persona, strategy FROM sim_users WHERE user_id = ?', [id]);
   if (!cur) throw new Error('בוט לא נמצא');
   const f = fields || {};
-  if (f.name !== undefined)  await db.run('UPDATE users SET name = ? WHERE id = ?', [String(f.name).slice(0, 120), id]);
+  const p = parsePersona(cur.persona);
+
   if (f.phone_number !== undefined) await db.run('UPDATE users SET phone_number = ? WHERE id = ?', [String(f.phone_number).slice(0, 32), id]);
   if (f.email !== undefined && String(f.email).trim()) {
     const exists = await db.one('SELECT id FROM users WHERE email = ? AND id <> ?', [String(f.email).trim(), id]);
@@ -426,18 +497,64 @@ async function updateOne(userId, fields) {
   }
   if (f.strategy !== undefined && STRATEGY_KEYS.includes(f.strategy)) await db.run('UPDATE sim_users SET strategy = ? WHERE user_id = ?', [f.strategy, id]);
   if (f.enabled !== undefined) await db.run('UPDATE sim_users SET enabled = ? WHERE user_id = ?', [f.enabled ? 1 : 0, id]);
-  if (f.persona !== undefined || f.bio !== undefined || f.style !== undefined) {
-    const p = parsePersona(cur.persona);
-    if (f.bio !== undefined) p.bio = String(f.bio).slice(0, 240);
-    if (f.style !== undefined) p.style = String(f.style).slice(0, 120);
-    if (f.avatar_hint !== undefined) p.avatar_hint = String(f.avatar_hint).slice(0, 200);
-    if (typeof f.persona === 'object' && f.persona) Object.assign(p, f.persona);
-    await db.run('UPDATE sim_users SET persona = ? WHERE user_id = ?', [JSON.stringify(p), id]);
-  }
+
+  if (f.name !== undefined) p.he_name = String(f.name).slice(0, 120);   // שם ידני מעדכן את השם העברי הבסיסי
+  if (f.bio !== undefined) p.bio = String(f.bio).slice(0, 240);
+  if (f.style !== undefined) p.style = String(f.style).slice(0, 120);
+  if (f.avatar_hint !== undefined) p.avatar_hint = String(f.avatar_hint).slice(0, 200);
+  if (f.email_as_name !== undefined) p.email_as_name = !!f.email_as_name;
+  if (typeof f.persona === 'object' && f.persona) Object.assign(p, f.persona);
+
+  // שם התצוגה: לפי email_as_name → handle של האימייל; אחרת השם העברי
+  const urow = await db.one('SELECT email, name FROM users WHERE id = ?', [id]);
+  const heName = p.he_name || urow.name;
+  const display = p.email_as_name ? String(urow.email).split('@')[0] : heName;
+  await db.run('UPDATE users SET name = ? WHERE id = ?', [String(display).slice(0, 120), id]);
+  await db.run('UPDATE sim_users SET persona = ? WHERE user_id = ?', [JSON.stringify(p), id]);
   return getOne(id);
 }
 
 async function setEnabled(userId, enabled) { return updateOne(userId, { enabled: !!enabled }); }
+
+// פעולה על קבוצת בוטים: הפעלה/השבתה, או שינוי ניחוש למשחק (לפי אסטרטגיה או תוצאה מפורשת)
+async function bulkAction({ ids, action, matchId, home, away }) {
+  await ensureSchema();
+  const list = [...new Set((ids || []).map(Number).filter(Number.isInteger))];
+  if (!list.length) throw new Error('לא נבחרו בוטים');
+  const ph = list.map(() => '?').join(',');
+
+  if (action === 'enable' || action === 'disable') {
+    await db.run(`UPDATE sim_users SET enabled = ? WHERE user_id IN (${ph})`, [action === 'enable' ? 1 : 0, ...list]);
+    return { ok: true, action, affected: list.length };
+  }
+
+  if (action === 'rebet') {
+    const mid = Number(matchId);
+    if (!Number.isInteger(mid)) throw new Error('יש לבחור משחק');
+    const match = await db.one('SELECT id FROM matches WHERE id = ?', [mid]);
+    if (!match) throw new Error('משחק לא נמצא');
+    const fixed = Number.isInteger(Number(home)) && Number.isInteger(Number(away));
+    let changed = 0;
+    for (const uid of list) {
+      let h, a;
+      if (fixed) { h = Number(home); a = Number(away); }
+      else {
+        const s = await db.one('SELECT strategy FROM sim_users WHERE user_id = ?', [uid]);
+        [h, a] = scoreByStrategy(STRATEGIES[s?.strategy]?.score || 'uniform');
+      }
+      await db.run(
+        `INSERT INTO predictions (user_id, match_id, home_score, away_score, points, submitted_at)
+         VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE home_score = VALUES(home_score), away_score = VALUES(away_score), submitted_at = CURRENT_TIMESTAMP, points = 0`,
+        [uid, mid, h, a]
+      );
+      changed += 1;
+    }
+    return { ok: true, action, affected: changed, matchId: mid, fixed };
+  }
+
+  throw new Error('פעולה לא חוקית');
+}
 
 // רענון תמונת פנים עם פרומפט מותאם (אופציונלי)
 async function regenerateAvatar(userId, prompt) {
@@ -497,4 +614,4 @@ function strategies() {
   return STRATEGY_KEYS.map(k => ({ key: k, label: STRATEGIES[k].he }));
 }
 
-module.exports = { startBatch, listSim, removeSim, removeAll, strategies, ensureSchema, getOne, updateOne, setEnabled, regenerateAvatar, history };
+module.exports = { startBatch, listSim, removeSim, removeAll, strategies, ensureSchema, getOne, updateOne, setEnabled, bulkAction, regenerateAvatar, history };
