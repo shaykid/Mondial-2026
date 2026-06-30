@@ -363,7 +363,7 @@ async function getUserRecipients(board, audience) {
     return db.query(`
       SELECT id, email, name
       FROM users
-      WHERE is_admin = 0 AND is_guest = 0
+      WHERE is_admin = 0 AND is_guest = 0 AND email NOT LIKE '%@sim.local'
       ORDER BY name ASC, id ASC
     `);
   }
@@ -373,7 +373,7 @@ async function getUserRecipients(board, audience) {
   const rows = await db.query(`
     SELECT id, email, name
     FROM users
-    WHERE id IN (${placeholders})
+    WHERE id IN (${placeholders}) AND email NOT LIKE '%@sim.local'
   `, ids);
   const byId = new Map(rows.map((row) => [row.id, row]));
   return ids.map((id) => byId.get(id)).filter(Boolean);

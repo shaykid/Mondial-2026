@@ -14,6 +14,7 @@ const { auth } = require('../middleware/auth');
 const { updateMatchScore, runDailyUpdate, scanAvailableFixturesFromESPN } = require('../services/scraper');
 const { recalcForMatch, loadBadgeConfig, DEFAULT_BADGE_CONFIG, leaderboard } = require('../services/scoring');
 const { settleSpecialBets } = require('../services/coins');
+const simulate = require('../services/simulate');
 const { getShabbatState } = require('../lib/shabbat');
 
 // אתר שומר שבת — חוסם שליחת הודעות בזמן שבת אם המצב פעיל. מחזיר true אם נחסם.
@@ -1695,6 +1696,58 @@ router.post('/team-reviews/generate', async (req, res) => {
     console.error('admin/team-reviews:', e);
     const msg = e.code === 'NO_API_KEY' ? 'חסר OPENAI_API_KEY בשרת' : `שגיאה: ${e.message}`;
     res.status(500).json({ error: msg });
+  }
+});
+
+// ─────────── סימולציה: משתמשים וירטואליים (בוטים) ───────────
+// גישה למנהל-על בלבד
+function fullAdminOnly(req, res) {
+  if (!req.user?.isAdmin) { res.status(403).json({ error: 'גישה למנהל-על בלבד' }); return false; }
+  return true;
+}
+
+router.get('/simulate/strategies', (req, res) => {
+  res.json({ strategies: simulate.strategies() });
+});
+
+router.get('/simulate/list', async (req, res) => {
+  try {
+    res.json(await simulate.listSim());
+  } catch (e) {
+    console.error('admin/simulate/list:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.post('/simulate', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try {
+    const { count, strategy, options } = req.body || {};
+    const result = await simulate.startBatch({ count, strategy, options });
+    res.json(result);
+  } catch (e) {
+    if (e.code === 'BUSY') return res.status(409).json({ error: e.message });
+    console.error('admin/simulate:', e);
+    res.status(500).json({ error: e.message || 'שגיאת שרת' });
+  }
+});
+
+router.delete('/simulate/all', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try {
+    res.json(await simulate.removeAll());
+  } catch (e) {
+    console.error('admin/simulate/all:', e);
+    res.status(500).json({ error: e.message || 'שגיאת שרת' });
+  }
+});
+
+router.delete('/simulate/:id', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try {
+    res.json(await simulate.removeSim(req.params.id));
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'שגיאה' });
   }
 });
 

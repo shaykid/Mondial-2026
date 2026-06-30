@@ -29,6 +29,7 @@ export default function Admin() {
     { id: 'contact', label: 'צור קשר' },
     { id: 'schedule', label: t('admin.tab_schedule') },
     { id: 'datasource', label: 'מקור נתונים' },
+    { id: 'simulate', label: '🤖 סימולציה' },
     { id: 'actions', label: t('admin.tab_actions') }
   ];
   const tabs = isFullAdmin ? allTabs : allTabs.filter(item => MANAGER_TABS.includes(item.id));
@@ -61,7 +62,141 @@ export default function Admin() {
       {tab === 'contact'  && <ContactTab  />}
       {tab === 'schedule' && <ScheduleTab />}
       {tab === 'datasource' && <DataSourceTab />}
+      {tab === 'simulate' && <SimulateTab />}
       {tab === 'actions'  && <ActionsTab  />}
+    </div>
+  );
+}
+
+/* ─────────────── סימולציה: משתמשים וירטואליים ─────────────── */
+const inputStyle = (w) => ({ display: 'block', marginTop: 4, width: w, minWidth: w, padding: '8px 10px', border: '1px solid var(--paper-dim)', borderRadius: 8, background: 'var(--paper-pure)' });
+function SimulateTab() {
+  const [strategies, setStrategies] = useState([]);
+  const [count, setCount] = useState(6);
+  const [strategy, setStrategy] = useState('random');
+  const [opts, setOpts] = useState({ bets: true, reviews: true, likes: true, suggestions: true, avatar: true });
+  const [list, setList] = useState([]);
+  const [progress, setProgress] = useState({ running: false, total: 0, done: 0, failed: 0 });
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get('/admin/simulate/list');
+      setList(data.users || []);
+      setProgress(data.progress || { running: false });
+    } catch (e) { /* */ }
+  };
+
+  useEffect(() => {
+    api.get('/admin/simulate/strategies').then(r => setStrategies(r.data.strategies || [])).catch(() => {});
+    load();
+    const iv = setInterval(load, 4000); // טבלה חיה
+    return () => clearInterval(iv);
+  }, []);
+
+  const create = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const { data } = await api.post('/admin/simulate', { count: Number(count), strategy, options: opts });
+      setMsg(`✓ התחילה יצירת ${data.started} בוטים (${data.strategy}). הטבלה תתעדכן בזמן אמת.`);
+      load();
+    } catch (e) {
+      setMsg(errMsg(e));
+    } finally { setBusy(false); }
+  };
+
+  const removeOne = async (id) => {
+    if (!confirm('למחוק את משתמש הסימולציה הזה (וכל הנתונים שלו)?')) return;
+    try { await api.delete(`/admin/simulate/${id}`); load(); } catch (e) { setMsg(errMsg(e)); }
+  };
+  const removeAll = async () => {
+    if (!confirm('למחוק את כל משתמשי הסימולציה? פעולה בלתי הפיכה.')) return;
+    try { const { data } = await api.delete('/admin/simulate/all'); setMsg(`✓ נמחקו ${data.removed} בוטים`); load(); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+
+  const toggle = (k) => setOpts(o => ({ ...o, [k]: !o[k] }));
+  const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="alert" style={{ background: 'var(--paper-dim)', marginBottom: 16 }}>
+        יצירת משתמשים וירטואליים (בוטים) עם שם/טלפון/אימייל ואווטאר שנוצרים ב-AI, ניחושים לכל המשחקים,
+        4-5 ריביוים, 20-30 לייקים (אהבתי) והצעות הימור לשחקנים אחרים — לפי אסטרטגיית הימור נבחרת.
+        <br /><small style={{ color: 'var(--muted)' }}>הבוטים מסומנים ולא מקבלים מיילים אמיתיים (דומיין @sim.local).</small>
+      </div>
+
+      <div style={{ display: 'grid', gap: 12, padding: 16, marginBottom: 20, background: 'var(--paper-pure)', border: '1px solid var(--paper-dim)', borderRadius: 12 }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label>כמות
+            <input type="number" min={1} max={50} value={count}
+              onChange={e => setCount(e.target.value)} style={inputStyle(90)} />
+          </label>
+          <label>אסטרטגיית הימור
+            <select value={strategy} onChange={e => setStrategy(e.target.value)} style={inputStyle(200)}>
+              {strategies.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {[['bets', 'ניחושים'], ['reviews', 'ריביוים'], ['likes', 'לייקים (אהבתי)'], ['suggestions', 'הצעות הימור'], ['avatar', 'אווטאר AI']].map(([k, lbl]) => (
+            <label key={k} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!opts[k]} onChange={() => toggle(k)} /> {lbl}
+            </label>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-gold" onClick={create} disabled={busy || progress.running}>
+            {progress.running ? 'סימולציה רצה…' : 'צור בוטים'}
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={load}>רענון</button>
+          <button className="btn btn-sm btn-outline" style={{ color: 'var(--crimson)' }} onClick={removeAll}>מחק הכל</button>
+        </div>
+        {progress.running && (
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>בתהליך: {progress.done}/{progress.total} (נכשלו: {progress.failed})</div>
+            <div style={{ height: 8, background: 'var(--paper-dim)', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: 'var(--pitch)' }} />
+            </div>
+          </div>
+        )}
+        {msg && <div className={`alert ${msg.startsWith('✓') ? 'alert-success' : 'alert-error'}`}>{msg}</div>}
+      </div>
+
+      <h3 style={{ margin: '8px 0' }}>בוטים פעילים ({list.length})</h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="leaderboard-table">
+          <thead>
+            <tr>
+              <th>שם</th><th>אסטרטגיה</th><th>טלפון</th><th>אימייל</th>
+              <th>ניחושים</th><th>ריביוים</th><th>לייקים</th><th>הצעות</th><th>שיחים</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(u => (
+              <tr key={u.user_id}>
+                <td style={{ fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {u.profile_image_url
+                    ? <img src={u.profile_image_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                    : <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--paper-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{(u.name || '?').slice(0, 1)}</span>}
+                  {u.name}
+                </td>
+                <td>{u.strategy_he}</td>
+                <td dir="ltr">{u.phone_number}</td>
+                <td dir="ltr" style={{ fontSize: 12, color: 'var(--muted)' }}>{u.email}</td>
+                <td>{u.predictions}</td>
+                <td>{u.reviews}</td>
+                <td>{u.likes}</td>
+                <td>{u.suggestions}</td>
+                <td>{u.balance?.toLocaleString?.() ?? u.balance}</td>
+                <td><button className="btn btn-sm btn-outline" style={{ color: 'var(--crimson)' }} onClick={() => removeOne(u.user_id)}>מחק</button></td>
+              </tr>
+            ))}
+            {list.length === 0 && <tr><td colSpan={10} style={{ color: 'var(--muted)' }}>אין עדיין בוטים — צור כמה למעלה.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

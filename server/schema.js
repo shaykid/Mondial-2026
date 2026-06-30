@@ -396,6 +396,15 @@ module.exports = [
     explanation     TEXT         NULL,
     generated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_ai_cons_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // ────────── סימולציה: משתמשים וירטואליים (בוטים) ──────────
+  `CREATE TABLE IF NOT EXISTS sim_users (
+    user_id     INT          NOT NULL PRIMARY KEY,
+    strategy    VARCHAR(40)  NOT NULL DEFAULT 'random',
+    persona     TEXT         NULL,
+    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sim_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 
 ];
