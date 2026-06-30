@@ -345,6 +345,12 @@ module.exports = [
     CONSTRAINT fk_ai_pred_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
+  `CREATE TABLE IF NOT EXISTS team_reviews (
+    team_code    VARCHAR(10)  NOT NULL PRIMARY KEY,
+    payload      MEDIUMTEXT   NOT NULL,
+    generated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
   `CREATE TABLE IF NOT EXISTS match_ai_consensus (
     match_id        INT          NOT NULL PRIMARY KEY,
     most_common     VARCHAR(160) NULL,

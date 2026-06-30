@@ -149,6 +149,12 @@ async function main() {
   await addColumnIfMissing('coin_wallets', 'challenge_open',
     'ALTER TABLE coin_wallets ADD COLUMN challenge_open TINYINT(1) NOT NULL DEFAULT 0 AFTER balance');
 
+  // תרגומי טקסט ריביו שמורים (תרגום פעם אחת ושמירה ב-DB)
+  await addColumnIfMissing('match_reviews', 'body_en',
+    'ALTER TABLE match_reviews ADD COLUMN body_en TEXT NULL AFTER body');
+  await addColumnIfMissing('match_reviews', 'body_ar',
+    'ALTER TABLE match_reviews ADD COLUMN body_ar TEXT NULL AFTER body_en');
+
   console.log('   ✓ הסכמה הוקמה בהצלחה');
 }
 

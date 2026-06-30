@@ -112,13 +112,13 @@ export default function Predictions() {
       setSpecialDirty(false);
     });
     api.get('/ai-predictions').then(r => setAiPredictions(r.data || {})).catch(() => {});
-    api.get('/reviews/summary').then(r => setReviewsByMatch(r.data || {})).catch(() => {});
+    api.get(`/reviews/summary?lang=${locale}`).then(r => setReviewsByMatch(r.data || {})).catch(() => {});
     refreshMyReviews();
   }, []);
 
   const refreshMyReviews = () => {
     if (isGuest) return;
-    api.get('/reviews/mine').then(r => {
+    api.get(`/reviews/mine?lang=${locale}`).then(r => {
       const map = {};
       (r.data || []).forEach(rev => { map[rev.match_id] = rev; });
       setMyReviewByMatch(map);

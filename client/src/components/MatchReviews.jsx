@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 // רשימת ריביוים מתקפלת מתחת לכל משחק. נטענת בעצלתיים בעת פתיחה,
 // ומתרעננת כש-bump משתנה (אחרי פרסום ריביו חדש).
 export default function MatchReviews({ matchId, bump = 0 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -17,7 +17,7 @@ export default function MatchReviews({ matchId, bump = 0 }) {
 
   const load = () => {
     setLoading(true);
-    api.get(`/reviews/match/${matchId}`)
+    api.get(`/reviews/match/${matchId}?lang=${locale}`)
       .then(r => { setRows(r.data || []); setCount((r.data || []).length); })
       .catch(() => setRows([]))
       .finally(() => setLoading(false));

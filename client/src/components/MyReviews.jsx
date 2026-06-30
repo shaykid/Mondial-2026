@@ -15,7 +15,7 @@ export default function MyReviews() {
   const [err, setErr] = useState('');
 
   const load = () => {
-    api.get('/reviews/mine')
+    api.get(`/reviews/mine?lang=${locale}`)
       .then(r => setRows(r.data || []))
       .catch(e => { setErr(errMsg(e)); setRows([]); });
   };

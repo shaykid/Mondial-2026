@@ -46,6 +46,7 @@ Rules:
 - Classify each prediction's type as one of: exact_score, betting_tip, probability_model, editorial_opinion.
 - Convert kickoff to Asia/Jerusalem in the output.
 - Echo back the SAME match_id I gave above for each match.
+- IMPORTANT: Write ALL human-readable text values in HEBREW — fields "prediction", "notes", "stage", "kickoff_israel_time", consensus "most_common_result" and "explanation". Keep "source_name" and "source_url" in their original form.
 
 Return ONLY valid JSON (no markdown), matching:
 {
@@ -213,4 +214,36 @@ async function generateDaily() {
   return generateForNextMatches(limit, false);
 }
 
-module.exports = { generateForNextMatches, generateDaily, getAllActive };
+// מתרגם לעברית ניחושי-מומחים קיימים שאינם בעברית (חד-פעמי / לפי דרישה)
+async function hebrewizeExisting() {
+  const { translateText } = require('./translate');
+  const hasHe = (s) => /[֐-׿]/.test(String(s || ''));
+  let changed = 0;
+
+  const preds = await db.query('SELECT id, prediction, notes FROM match_ai_predictions');
+  for (const p of preds) {
+    const upd = {};
+    if (p.prediction && !hasHe(p.prediction)) { const t = await translateText(p.prediction, 'he'); if (t) upd.prediction = t; }
+    if (p.notes && !hasHe(p.notes)) { const t = await translateText(p.notes, 'he'); if (t) upd.notes = t; }
+    if (Object.keys(upd).length) {
+      await db.run('UPDATE match_ai_predictions SET prediction = COALESCE(?, prediction), notes = COALESCE(?, notes) WHERE id = ?',
+        [upd.prediction ?? null, upd.notes ?? null, p.id]);
+      changed++;
+    }
+  }
+
+  const cons = await db.query('SELECT match_id, most_common, explanation FROM match_ai_consensus');
+  for (const c of cons) {
+    const upd = {};
+    if (c.most_common && !hasHe(c.most_common)) { const t = await translateText(c.most_common, 'he'); if (t) upd.most_common = t; }
+    if (c.explanation && !hasHe(c.explanation)) { const t = await translateText(c.explanation, 'he'); if (t) upd.explanation = t; }
+    if (Object.keys(upd).length) {
+      await db.run('UPDATE match_ai_consensus SET most_common = COALESCE(?, most_common), explanation = COALESCE(?, explanation) WHERE match_id = ?',
+        [upd.most_common ?? null, upd.explanation ?? null, c.match_id]);
+      changed++;
+    }
+  }
+  return { ok: true, changed };
+}
+
+module.exports = { generateForNextMatches, generateDaily, getAllActive, hebrewizeExisting };

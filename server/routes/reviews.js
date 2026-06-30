@@ -7,8 +7,29 @@ const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { transcribeAudioBuffer } = require('../services/transcribe');
 const { settleReviewReward } = require('../services/coins');
+const { translateText } = require('../services/translate');
 
 const router = express.Router();
+
+// מתרגם טקסטי ריביו לשפת האתר (en/ar) ושומר ב-DB בפעם הראשונה. עברית = המקור.
+function normLang(l) {
+  const s = String(l || 'he').toLowerCase();
+  return ['he', 'en', 'ar'].includes(s) ? s : 'he';
+}
+async function localizeReviews(rows, lang) {
+  if (lang !== 'en' && lang !== 'ar') return rows;
+  const col = lang === 'en' ? 'body_en' : 'body_ar';
+  for (const r of rows) {
+    if (!r.body) continue;
+    if (r[col]) { r.body = r[col]; continue; }
+    const tr = await translateText(r.body, lang);
+    if (tr) {
+      await db.run(`UPDATE match_reviews SET ${col} = ? WHERE id = ?`, [tr, r.id]);
+      r.body = tr;
+    }
+  }
+  return rows;
+}
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 16 * 1024 * 1024 } // ~16MB מספיק להקלטה קולית קצרה
@@ -145,7 +166,7 @@ router.get('/match/:id', auth(), async (req, res) => {
     const matchId = Number(req.params.id);
     if (!Number.isInteger(matchId)) return res.status(400).json({ error: 'משחק לא תקין' });
     const rows = await db.query(`
-      SELECT r.id, r.user_id, r.body, r.audio_url, r.include_prediction,
+      SELECT r.id, r.user_id, r.body, r.body_en, r.body_ar, r.audio_url, r.include_prediction,
              r.pred_home, r.pred_away, r.created_at,
              u.name AS user_name, u.profile_image_url,
              (SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS vote_count,
@@ -156,6 +177,8 @@ router.get('/match/:id', auth(), async (req, res) => {
       ORDER BY vote_count DESC, r.created_at DESC
     `, [req.user.id, matchId]);
     rows.forEach(r => { r.vote_count = Number(r.vote_count); r.my_vote = !!Number(r.my_vote); });
+    await localizeReviews(rows, normLang(req.query.lang));
+    rows.forEach(r => { delete r.body_en; delete r.body_ar; });
     res.json(rows);
   } catch (e) {
     console.error('reviews/match:', e);
@@ -167,7 +190,7 @@ router.get('/match/:id', auth(), async (req, res) => {
 router.get('/summary', auth(), async (req, res) => {
   try {
     const rows = await db.query(`
-      SELECT r.id, r.match_id, r.user_id, r.body, r.audio_url, r.transcript, r.created_at,
+      SELECT r.id, r.match_id, r.user_id, r.body, r.body_en, r.body_ar, r.audio_url, r.transcript, r.created_at,
              u.name AS user_name, u.profile_image_url,
              (SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS vote_count
       FROM match_reviews r
@@ -176,9 +199,11 @@ router.get('/summary', auth(), async (req, res) => {
       WHERE r.status = 'published' AND m.status <> 'finished'
       ORDER BY r.match_id, vote_count DESC, r.created_at DESC
     `);
+    await localizeReviews(rows, normLang(req.query.lang));
     const byMatch = {};
     for (const r of rows) {
       r.vote_count = Number(r.vote_count);
+      delete r.body_en; delete r.body_ar;
       (byMatch[r.match_id] = byMatch[r.match_id] || []).push(r);
     }
     res.json(byMatch);
@@ -192,7 +217,7 @@ router.get('/summary', auth(), async (req, res) => {
 router.get('/mine', auth(), async (req, res) => {
   try {
     const rows = await db.query(`
-      SELECT r.id, r.match_id, r.body, r.audio_url, r.include_prediction,
+      SELECT r.id, r.match_id, r.body, r.body_en, r.body_ar, r.audio_url, r.include_prediction,
              r.pred_home, r.pred_away, r.created_at, r.coins_awarded,
              m.home_code, m.away_code, m.kickoff, m.status AS match_status,
              (SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS vote_count
@@ -202,6 +227,8 @@ router.get('/mine', auth(), async (req, res) => {
       ORDER BY r.created_at DESC
     `, [req.user.id]);
     rows.forEach(r => { r.vote_count = Number(r.vote_count); r.coins_awarded = Number(r.coins_awarded || 0); });
+    await localizeReviews(rows, normLang(req.query.lang));
+    rows.forEach(r => { delete r.body_en; delete r.body_ar; });
     res.json(rows);
   } catch (e) {
     console.error('reviews/mine:', e);
