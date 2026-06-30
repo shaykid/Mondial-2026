@@ -419,10 +419,13 @@ async function createOne(strategy, options) {
     }
   }
 
-  // ניחושים — מכל המשחקים (אפשר תת-קבוצה אקראית)
+  // ניחושים — מספר אקראי בין 60 ל-82 משחקים (כך שלחלק מהבוטים חסרים ניחושים)
   if (options.bets !== false && matches.length) {
-    for (const m of matches) {
-      if (Math.random() < 0.12) continue; // מדלג על חלק קטן כדי שייראה אנושי
+    const target = Math.min(matches.length, 60 + rnd(23)); // 60..82
+    const order = matches.slice();
+    for (let i = order.length - 1; i > 0; i -= 1) { const j = rnd(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+    const chosenMatches = order.slice(0, target);
+    for (const m of chosenMatches) {
       let h, a;
       const sp = shadowPreds && shadowPreds.get(m.id);
       if (sp) {
@@ -722,15 +725,17 @@ async function simSetting(key, def) {
 function kickoffMs(kk) { const s = String(kk); return new Date(s.endsWith('Z') ? s : `${s.replace(' ', 'T')}Z`).getTime(); }
 
 async function organicRebet(bot, lockH) {
-  const rows = await db.query("SELECT id, kickoff FROM matches WHERE status <> 'finished' ORDER BY RAND() LIMIT 12");
+  // עורך רק ניחושים קיימים (לא מוסיף חדשים) — כדי לשמר את הניחושים החסרים
+  const rows = await db.query(
+    `SELECT m.id, m.kickoff FROM matches m
+     JOIN predictions p ON p.match_id = m.id AND p.user_id = ?
+     WHERE m.status <> 'finished' ORDER BY RAND() LIMIT 12`, [bot.user_id]);
   for (const m of rows) {
     if (Date.now() >= kickoffMs(m.kickoff) - lockH * 3600 * 1000) continue; // נעול
     const [h, a] = scoreByStrategy(STRATEGIES[bot.strategy]?.score || 'uniform');
     await db.run(
-      `INSERT INTO predictions (user_id, match_id, home_score, away_score, points, submitted_at)
-       VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE home_score=VALUES(home_score), away_score=VALUES(away_score), submitted_at=CURRENT_TIMESTAMP, points=0`,
-      [bot.user_id, m.id, h, a]
+      'UPDATE predictions SET home_score=?, away_score=?, submitted_at=CURRENT_TIMESTAMP, points=0 WHERE user_id=? AND match_id=?',
+      [h, a, bot.user_id, m.id]
     );
     return 1;
   }
