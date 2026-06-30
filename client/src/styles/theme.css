@@ -101,8 +101,8 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 }
 
 .app-header {
-  background: #00262b;
-  color: var(--paper);
+  background: var(--header-bg, #00262b);
+  color: var(--header-fg, var(--paper));
   border-bottom: 4px solid var(--gold);
   box-shadow: var(--shadow-md);
 }
@@ -314,13 +314,13 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   font-size: 18px;
   letter-spacing: 0.04em;
   padding: 10px 16px;
-  color: rgba(245,240,230,0.7);
+  color: var(--header-fg-dim, rgba(245,240,230,0.7));
   border-radius: 2px;
   transition: all .2s;
   position: relative;
 }
-.nav-link:hover { color: var(--paper); background: rgba(255,255,255,0.05); }
-.nav-link.active { color: var(--gold); }
+.nav-link:hover { color: var(--header-fg, var(--paper)); background: var(--header-hover, rgba(255,255,255,0.05)); }
+.nav-link.active { color: var(--header-active, var(--gold)); }
 .nav-link.active::after {
   content: '';
   position: absolute;
