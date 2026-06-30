@@ -19,7 +19,15 @@ const STRATEGIES = {
   thinker:  { he: 'מחושב (הסתברות)',  score: 'realistic',stakeMin: 300, stakeMax: 1200, suggest: 2 },
   random:   { he: 'אקראי',           score: 'uniform',  stakeMin: 100, stakeMax: 1500, suggest: 1 },
   blonde:   { he: 'בלונדיני (הפוך ממישהו)', score: 'blonde', stakeMin: 100, stakeMax: 800, suggest: 1 },
+  brownete: { he: 'ברונטית (הפוך + שינוי שערים)', score: 'brownete', stakeMin: 100, stakeMax: 800, suggest: 1 },
 };
+// משאיר את אותו מנצח/תיקו אך מגריל מחדש את מספר השערים
+function reshuffleOutcome(h, a) {
+  if (h === a) { const n = rnd(4); return [n, n]; }
+  const hi = 1 + rnd(4);     // שערי המנצח 1-4
+  const lo = rnd(hi);        // שערי המפסיד 0..hi-1
+  return h > a ? [hi, lo] : [lo, hi];
+}
 const STRATEGY_KEYS = Object.keys(STRATEGIES);
 
 // ───────────── מאגרי שמות (סגנון תל-אביבי, גיבוי ללא-AI) ─────────────
@@ -334,9 +342,10 @@ async function createOne(strategy, options) {
   const mode = STRATEGIES[strategy]?.score || 'uniform';
   const matches = await loadMatches();
 
-  // אסטרטגיית "בלונדיני": בוחר משתמש חי אקראי ויהמר הפוך ממנו (היפוך תוצאה)
+  // אסטרטגיות "בלונדיני"/"ברונטית": בוחר משתמש חי אקראי ומהמר הפוך ממנו
+  const shadowStrat = strategy === 'blonde' || strategy === 'brownete';
   let shadowPreds = null;
-  if (strategy === 'blonde') {
+  if (shadowStrat) {
     const shadow = await db.one(
       `SELECT u.id, u.name FROM users u
        WHERE u.is_admin = 0 AND u.is_guest = 0 AND u.id <> ?
@@ -344,7 +353,7 @@ async function createOne(strategy, options) {
        ORDER BY RAND() LIMIT 1`, [userId]);
     if (shadow) {
       persona.shadow_user_id = shadow.id; persona.shadow_name = shadow.name;
-      persona.bio = `${persona.bio || ''} — תמיד מהמר הפוך מ${shadow.name}`.trim();
+      persona.bio = `${persona.bio || ''} — מהמר הפוך מ${shadow.name}${strategy === 'brownete' ? ' (עם שינוי שערים)' : ''}`.trim();
       await db.run('UPDATE sim_users SET persona = ? WHERE user_id = ?', [JSON.stringify({ ...persona, phone, email }), userId]);
       const rows = await db.query('SELECT match_id, home_score, away_score FROM predictions WHERE user_id = ?', [shadow.id]);
       shadowPreds = new Map(rows.map(r => [r.match_id, r]));
@@ -357,8 +366,10 @@ async function createOne(strategy, options) {
       if (Math.random() < 0.12) continue; // מדלג על חלק קטן כדי שייראה אנושי
       let h, a;
       const sp = shadowPreds && shadowPreds.get(m.id);
-      if (sp) { h = sp.away_score; a = sp.home_score; }   // הפוך מהמשתמש החי
-      else { [h, a] = scoreByStrategy(mode); }
+      if (sp) {
+        h = sp.away_score; a = sp.home_score;             // הפוך מהמשתמש החי
+        if (strategy === 'brownete') { [h, a] = reshuffleOutcome(h, a); } // אותו מנצח, שערים אחרים
+      } else { [h, a] = scoreByStrategy(mode); }
       await db.run(
         `INSERT INTO predictions (user_id, match_id, home_score, away_score, points, submitted_at)
          VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
