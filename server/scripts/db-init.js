@@ -153,9 +153,17 @@ async function main() {
   await addColumnIfMissing('users', 'gender',
     "ALTER TABLE users ADD COLUMN gender ENUM('male','female','irrelevant','random') NOT NULL DEFAULT 'random' AFTER profile_image_url");
 
-  // העדפת משתמש: האם להציג את כפתור "פרסם את התחזית שלך" (ברירת מחדל: כן)
+  // העדפת משתמש: האם להציג את כפתור "פרסם את התחזית שלך" (ברירת מחדל: לא)
   await addColumnIfMissing('users', 'publish_prediction',
-    'ALTER TABLE users ADD COLUMN publish_prediction TINYINT(1) NOT NULL DEFAULT 1 AFTER profile_image_url');
+    'ALTER TABLE users ADD COLUMN publish_prediction TINYINT(1) NOT NULL DEFAULT 0 AFTER profile_image_url');
+  // ברירת המחדל שונתה ל-0 (פרסום הוא opt-in). מעדכן עמודה קיימת + איפוס חד-פעמי של משתמשים קיימים.
+  await db.query('ALTER TABLE users ALTER COLUMN publish_prediction SET DEFAULT 0').catch(() => {});
+  const pubMigrated = await db.one("SELECT `value` FROM settings WHERE `key` = 'publish_default_migrated'");
+  if (!pubMigrated) {
+    await db.query('UPDATE users SET publish_prediction = 0');
+    await db.query("INSERT INTO settings (`key`, `value`) VALUES ('publish_default_migrated', '1') ON DUPLICATE KEY UPDATE `value` = '1'");
+    console.log('   ✓ publish_prediction → ברירת מחדל לא-מפרסם (איפוס חד-פעמי)');
+  }
 
   // הימור רב-מקבלים: סכום מוכפל במספר המקבלים
   await addColumnIfMissing('coin_bets', 'max_acceptors',

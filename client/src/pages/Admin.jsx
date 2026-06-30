@@ -155,6 +155,8 @@ function UsersTab() {
       phone_number: user.phone_number || '',
       department: user.department || '',
       can_guess_groups: !!user.can_guess_groups,
+      publish_prediction: !!user.publish_prediction,
+      gender: ['male', 'female', 'irrelevant', 'random'].includes(user.gender) ? user.gender : 'random',
       role: user.is_admin ? 'admin' : (user.role || 'user')
     });
   };
@@ -221,7 +223,9 @@ function UsersTab() {
         email: editDraft.email,
         phone_number: editDraft.phone_number,
         department: editDraft.department,
-        can_guess_groups: editDraft.can_guess_groups
+        can_guess_groups: editDraft.can_guess_groups,
+        publish_prediction: editDraft.publish_prediction,
+        gender: editDraft.gender
       };
       if (isFullAdmin) payload.role = editDraft.role;
       const { data } = await api.patch(`/admin/users/${editingUser.id}`, payload);
@@ -234,6 +238,8 @@ function UsersTab() {
           phone_number: data.user.phone_number || '',
           department: data.user.department || '',
           can_guess_groups: !!data.user.can_guess_groups,
+          publish_prediction: !!data.user.publish_prediction,
+          gender: ['male', 'female', 'irrelevant', 'random'].includes(data.user.gender) ? data.user.gender : 'random',
           role: data.user.is_admin ? 'admin' : (data.user.role || 'user')
         });
       }
@@ -660,6 +666,26 @@ function UsersTab() {
               />
               <span>ניחוש קבוצתי (הרשאת גישה למערכת הניחוש הקבוצתי)</span>
             </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!editDraft.publish_prediction}
+                onChange={e => setEditDraft(s => ({ ...s, publish_prediction: e.target.checked }))}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>פרסום תחזיות (מציג למשתמש את כפתור ההקלטה "פרסם את התחזית שלך")</span>
+            </label>
+
+            <div className="field" style={{ marginTop: 16, maxWidth: 260 }}>
+              <label>מגדר (לניסוח טקסטים בעברית)</label>
+              <select value={editDraft.gender || 'random'} onChange={e => setEditDraft(s => ({ ...s, gender: e.target.value }))}>
+                <option value="random">אקראי</option>
+                <option value="male">זכר</option>
+                <option value="female">נקבה</option>
+                <option value="irrelevant">לא רלוונטי</option>
+              </select>
+            </div>
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 20 }}>
               <button className="btn btn-pitch" onClick={saveUser} disabled={editBusy}>
@@ -1341,6 +1367,21 @@ function SettingsTab() {
     <div style={{ maxWidth: 720 }}>
       {err && <div className="alert alert-error">{err}</div>}
       {ok  && <div className="alert alert-success">{ok}</div>}
+
+      <SettingsCard title="מערכת שיחים (שיח-מרקט)">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={draft.coins_system_enabled === undefined ? true : ['1', 'true', 'on', 'yes'].includes(String(draft.coins_system_enabled).toLowerCase())}
+            onChange={(e) => upd('coins_system_enabled', e.target.checked ? '1' : '0')}
+          />
+          <span>הפעל מערכת שיחים</span>
+        </label>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+          כשמכובה — כל מערכת השיחים (ניחושי שיח-מרקט, הימורים, ארנק, טבלת מצטיינים,
+          לשונית השיחים בתפריט ופאנל "ההימורים שלי" בפרופיל) תוסתר ותושבת לחלוטין באתר.
+        </p>
+      </SettingsCard>
 
       <SettingsCard title="אתר שומר שבת">
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>

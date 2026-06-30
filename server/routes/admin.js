@@ -531,7 +531,7 @@ router.get('/overview', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const rows = await db.query(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.publish_prediction, u.gender, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       WHERE u.is_guest = 0
@@ -572,7 +572,7 @@ router.post('/users', async (req, res) => {
       [email, name, phoneNumber || null, department || null, hash, role === 'admin' ? 1 : 0, role]
     );
     const user = await db.one(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.publish_prediction, u.gender, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       WHERE u.id = ?
@@ -1466,6 +1466,13 @@ router.patch('/users/:id', async (req, res) => {
       ? null
       : (req.body.can_guess_groups ? 1 : 0);
 
+    const publishPrediction = req.body?.publish_prediction === undefined
+      ? null
+      : (req.body.publish_prediction ? 1 : 0);
+
+    const nextGender = (req.body?.gender !== undefined && ['male', 'female', 'irrelevant', 'random'].includes(String(req.body.gender)))
+      ? String(req.body.gender) : null;
+
     // רק מנהל מערכת מלא רשאי לשנות תפקיד
     let nextRole = null;
     if (req.user.isAdmin && req.body?.role !== undefined) {
@@ -1483,6 +1490,8 @@ router.patch('/users/:id', async (req, res) => {
     const sets = ['name = ?', 'email = ?', 'phone_number = ?', 'department = ?'];
     const params = [name, email, phoneNumber || null, department || null];
     if (canGuessGroups !== null) { sets.push('can_guess_groups = ?'); params.push(canGuessGroups); }
+    if (publishPrediction !== null) { sets.push('publish_prediction = ?'); params.push(publishPrediction); }
+    if (nextGender !== null) { sets.push('gender = ?'); params.push(nextGender); }
     if (nextRole !== null) {
       sets.push('role = ?'); params.push(nextRole);
       sets.push('is_admin = ?'); params.push(nextRole === 'admin' ? 1 : 0);
@@ -1491,7 +1500,7 @@ router.patch('/users/:id', async (req, res) => {
     await db.run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, params);
 
     const updated = await db.one(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.role, u.created_at,
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.publish_prediction, u.gender, u.role, u.created_at,
         (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
       FROM users u
       WHERE u.id = ?

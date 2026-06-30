@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import LanguageSelector from './LanguageSelector';
 
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user, logout, coinsEnabled } = useAuth();
   const { t } = useTranslation();
   const { assets } = useTheme();
   const nav = useNavigate();
@@ -45,7 +45,7 @@ export default function Header() {
           {user.canGuessGroups && (
             <NavLink to="/guess-groups" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.guess_groups')}</NavLink>
           )}
-          {!user.isGuest && (
+          {!user.isGuest && coinsEnabled && (
             <NavLink to="/coin-bets" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.coin_betting')}</NavLink>
           )}
           <NavLink to="/leaderboard" className={({isActive}) => 'nav-link' + (isActive ? ' active' : '')}>{t('nav.leaderboard')}</NavLink>

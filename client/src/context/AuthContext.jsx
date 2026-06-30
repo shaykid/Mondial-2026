@@ -10,6 +10,14 @@ const touch = () => localStorage.setItem('mondial_last_active', String(Date.now(
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [coinsEnabled, setCoinsEnabled] = useState(true); // מתג ראשי למערכת השיחים
+
+  // דגלי תכונות ציבוריים
+  useEffect(() => {
+    api.get('/site/features')
+      .then(r => setCoinsEnabled(r.data?.coins_enabled !== false))
+      .catch(() => setCoinsEnabled(true));
+  }, []);
 
   const persistSession = (token, u) => {
     localStorage.setItem('mondial_token', token);
@@ -90,7 +98,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, loading, login, register, logout, updateProfile,
-      guestStart, guestCheckEmail, guestFinalize
+      guestStart, guestCheckEmail, guestFinalize, coinsEnabled
     }}>
       {children}
     </AuthContext.Provider>

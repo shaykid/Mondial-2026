@@ -8,7 +8,7 @@ import MyReviews from '../components/MyReviews';
 import MyCoinsPanel from '../components/MyCoinsPanel';
 
 export default function Profile() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, coinsEnabled } = useAuth();
   const { t, language } = useTranslation();
   const [stats, setStats] = useState(null);
   const [topGroups, setTopGroups] = useState([]);
@@ -21,7 +21,7 @@ export default function Profile() {
   const [profilePreviewUrl, setProfilePreviewUrl] = useState('');
   const [phoneDraft, setPhoneDraft] = useState(user?.phone_number || '');
   const [languageDraft, setLanguageDraft] = useState(user?.preferred_language || language);
-  const [publishDraft, setPublishDraft] = useState(user?.publishPrediction !== false);
+  const [publishDraft, setPublishDraft] = useState(user?.publishPrediction === true);
   const [genderDraft, setGenderDraft] = useState(user?.gender || 'random');
   const [profileMsg, setProfileMsg] = useState('');
   const [err, setErr] = useState('');
@@ -236,7 +236,7 @@ export default function Profile() {
         </form>
       </div>
 
-      {!user?.isGuest && <MyCoinsPanel />}
+      {!user?.isGuest && coinsEnabled && <MyCoinsPanel />}
 
       <MyReviews />
 

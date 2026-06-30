@@ -354,6 +354,7 @@ const translations = {
   'coin.your_pick_short': { he: 'הניחוש שלך', en: 'Your pick', ar: 'اختيارك' },
   'coin.their_pick': { he: 'הניחוש שלו', en: 'Their pick', ar: 'اختياره' },
   'coin.challenge': { he: 'אתגר', en: 'Challenge', ar: 'تحدَّ' },
+  'coin.system_disabled': { he: 'מערכת השיחים אינה פעילה כרגע.', en: 'The coins system is currently disabled.', ar: 'نظام العملات معطّل حاليًا.' },
   'coin.tab_special': { he: '🏆 ניחושים מיוחדים', en: '🏆 Special bets', ar: '🏆 رهانات خاصة' },
   'coin.sp_help': { he: 'הימור כן/לא מול משתמש אחר על ניחושים מיוחדים. היישוב מתבצע בסיום הטורניר לפי התוצאה בפועל.', en: 'Yes/No bet vs another user on special predictions. Settled at tournament end by the actual result.', ar: 'رهان نعم/لا ضد مستخدم آخر على التوقعات الخاصة.' },
   'coin.sp_market': { he: 'סוג הניחוש', en: 'Market', ar: 'السوق' },

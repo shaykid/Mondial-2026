@@ -28,7 +28,7 @@ function guessPhrase(t, propLabel, m, prop, negate) {
 }
 
 export default function CoinBets() {
-  const { user } = useAuth();
+  const { user, coinsEnabled } = useAuth();
   const { t, locale, pickText } = useTranslation();
   const location = useLocation();
   const challenge = location.state?.challenge; // { userId, userName, matchId }
@@ -75,6 +75,15 @@ export default function CoinBets() {
     try { await fn(); setMsg(okMsg); refresh(); }
     catch (e) { setErr(errMsg(e)); }
   };
+
+  if (!coinsEnabled) {
+    return (
+      <main className="page" dir="rtl">
+        <h1 className="page-title">{t('coin.title')}</h1>
+        <div className="coin-empty">{t('coin.system_disabled')}</div>
+      </main>
+    );
+  }
 
   return (
     <main className="page" dir="rtl">

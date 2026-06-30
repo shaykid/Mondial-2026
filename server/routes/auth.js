@@ -78,7 +78,7 @@ async function sanitize(user) {
     role: user.is_admin ? 'admin' : (user.role || 'user'),
     isGuest: !!user.is_guest,
     canGuessGroups: siteGuessGroupsEnabled && (!!user.is_admin || !!user.can_guess_groups),
-    publishPrediction: user.publish_prediction == null ? true : !!user.publish_prediction,
+    publishPrediction: user.publish_prediction == null ? false : !!user.publish_prediction,
     gender: ['male', 'female', 'irrelevant', 'random'].includes(user.gender) ? user.gender : 'random',
     createdAt: user.created_at
   };

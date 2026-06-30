@@ -7,6 +7,16 @@ const { ensureWallet, adjust, coinLeaderboard, userCoinStats, setChallengeOpen, 
 
 const router = express.Router();
 
+// מתג ראשי: אם מערכת השיחים כבויה — כל ה-API חסום
+router.use(async (req, res, next) => {
+  try {
+    const row = await db.one("SELECT `value` FROM settings WHERE `key` = 'coins_system_enabled'");
+    const enabled = row == null ? true : ['1', 'true', 'on', 'yes'].includes(String(row.value).toLowerCase());
+    if (!enabled) return res.status(403).json({ error: 'מערכת השיחים אינה פעילה', coins_disabled: true });
+    next();
+  } catch (e) { next(); }
+});
+
 // ───────── הימורי ניחושים מיוחדים (אלופה/סגנית/מלך שערים) ─────────
 router.get('/special/open', auth(), async (req, res) => {
   try { res.json(await listOpenSpecialBets(req.user.id)); }

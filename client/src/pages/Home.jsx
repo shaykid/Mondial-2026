@@ -10,7 +10,7 @@ import { useTranslation } from '../i18n/TranslationContext';
 import { ilMs } from '../utils/time';
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, coinsEnabled } = useAuth();
   const { t } = useTranslation();
   const [matches, setMatches] = useState([]);
   const [myPredictions, setMyPredictions] = useState([]);
@@ -26,11 +26,11 @@ export default function Home() {
     api.get('/matches').then(r => setMatches(r.data)).catch(() => {});
     api.get('/predictions/my').then(r => setMyPredictions(r.data.predictions)).catch(() => {});
     api.get('/leaderboard').then(r => setLeaderboard(r.data)).catch(() => {});
-    if (!user.isGuest) {
+    if (!user.isGuest && coinsEnabled) {
       api.get('/coin-bets/stats').then(r => setCoinStats(r.data)).catch(() => {});
       api.get('/coin-bets/leaderboard').then(r => setCoinBoard((r.data || []).slice(0, 5))).catch(() => {});
     }
-  }, []);
+  }, [coinsEnabled]);
 
   const toggleChallengeOpen = async () => {
     if (!coinStats) return;
