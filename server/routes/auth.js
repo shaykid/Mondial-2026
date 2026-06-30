@@ -47,6 +47,14 @@ async function ensureAuthColumns() {
   if (!preferredLanguageCol?.n) {
     await db.query("ALTER TABLE users ADD COLUMN preferred_language VARCHAR(8) NOT NULL DEFAULT 'he' AFTER phone_number");
   }
+  const lastLoginCol = await db.one(`
+    SELECT COUNT(*) AS n FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'last_login_at'
+  `);
+  if (!lastLoginCol?.n) {
+    await db.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL');
+    await db.query('ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(64) NULL');
+  }
   authColumnsReady = true;
 }
 
@@ -131,6 +139,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
     }
     const token = signToken(user);
+    // תיעוד כניסה אחרונה (לשאלות "מי התחבר")
+    try {
+      const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim().slice(0, 64);
+      await db.run('UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?', [ip, user.id]);
+    } catch (e) { /* לא חוסם כניסה */ }
     res.json({ token, user: await sanitize(user) });
   } catch (e) {
     console.error('login:', e);

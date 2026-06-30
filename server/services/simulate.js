@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { createSpecialBet } = require('./coins');
+const { createSpecialBet, ensureWallet, adjust } = require('./coins');
 
 const OPENAI_CHAT = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_IMAGE = 'https://api.openai.com/v1/images/generations';
@@ -193,7 +193,14 @@ async function generateAvatar(persona, customPrompt) {
     const dir = path.join(__dirname, '..', '..', 'data', 'profile_images', 'sim');
     await fs.promises.mkdir(dir, { recursive: true });
     const fname = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
-    await fs.promises.writeFile(path.join(dir, fname), Buffer.from(b64, 'base64'));
+    let buf = Buffer.from(b64, 'base64');
+    // נקה דפוסים נסתרים/סימני-מים בלתי-נראים מהתמונה שנוצרה ב-AI (ספריית unwatermark)
+    try {
+      const { sanitizeBuffer } = require('../vendor/unwatermark');
+      const san = await sanitizeBuffer(buf, { mime: 'image/png' });
+      if (san && san.buffer && san.buffer.length) buf = san.buffer;
+    } catch (e) { console.error('unwatermark skip:', e.message); }
+    await fs.promises.writeFile(path.join(dir, fname), buf);
     return `/data/profile_images/sim/${fname}`;
   } catch (e) { console.error('sim avatar:', e.message); return null; }
 }
@@ -275,12 +282,18 @@ async function buildPersona(strategy, sector) {
   const base = ruleBasedPersona(strategy); // קובע מגדר (60% נקבה) ושם-בסיס בלטינית
   const genderHe = base.gender === 'female' ? 'אישה' : 'גבר';
   const secName = sector?.name || '';
+  // פרומפט דמות עשירה (מבוסס תבנית דמות לסיפור רשת חברתית) — המגזר משפיע באופן טבעי, ללא סטריאוטיפ
   const ai = await chatJSON(
-    'אתה יוצר פרסונות בדויות עשירות של ישראלים מכל מגזרי החברה, עבור סביבת בדיקה. החזר JSON בלבד.',
-    `צור פרסונה ישראלית ריאליסטית (${genderHe}) מהמגזר "${secName}". שם עברי מודרני התואם למגזר.
-תאר אותה בעושר: מקום מגורים, מצב משפחתי, מקום עבודה, ושמות הילדים וגילם.
+    'אתה יוצר דמויות בדויות אמינות של ישראלים מכל מגזרי החברה לפרויקט נרטיב ברשת חברתית (סגנון פייסבוק), לסביבת בדיקה. הדמות פיקטיבית לחלוטין, לא מבוססת אדם אמיתי, אנושית ורב-ממדית — לא קריקטורה ולא נציג של כל המגזר. החזר JSON בלבד.',
+    `צור דמות ישראלית ריאליסטית (${genderHe}) מהמגזר החברתי "${secName}". השתמש במגזר כדי לעצב שפה, נורמות משפחה, הומור, רגישויות והתנהגות אונליין — באופן טבעי, מבלי לשטח את הדמות או להפוך אותה לסטריאוטיפ. כלול סתירות פנימיות, חמימות, פגמים ועומק רגשי.
 אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
-החזר JSON: {"name":"שם מלא בעברית","handle":"תעתיק לטיני CamelCase ללא רווחים","bio":"2-3 משפטים בעברית המשלבים מגזר, עיסוק ומשפחה","avatar_hint":"תיאור קצר באנגלית למראה החיצוני התואם למגזר","style":"סגנון הניחוש בעברית","residence":"עיר","marital_status":"מצב משפחתי","workplace":"מקום עבודה","children":[{"name":"שם","age":גיל}]}`
+החזר JSON עם השדות:
+{"name":"שם מלא בעברית מודרני התואם למגזר","handle":"תעתיק לטיני CamelCase ללא רווחים","age":גיל,
+"bio":"2-3 משפטים בעברית המשלבים מגזר, עיסוק ומשפחה","avatar_hint":"תיאור קצר באנגלית למראה החיצוני התואם למגזר",
+"residence":"עיר/יישוב","marital_status":"מצב משפחתי","workplace":"מקום עבודה","children":[{"name":"שם","age":גיל}],
+"personality":"תיאור אישיות קצר (חם/חד/חשדן/נוסטלגי...)","inner_conflict":"פצע/צורך/מתח פנימי שמניע אותה",
+"central_conflict":"מה היא רוצה ומה חוסם","online_style":"איך היא כותבת ברשת: אורך משפט, הומור, אימוג'ים, איך מבקשת עזרה",
+"topics":["נושא שהיא מפרסמת עליו","..."],"style":"סגנון הניחוש בכדורגל בעברית"}`
   );
   const richFallback = {
     residence: pick(CITIES), marital_status: pick(MARITAL), workplace: pick(JOBS), children: fallbackChildren()
@@ -288,19 +301,26 @@ async function buildPersona(strategy, sector) {
   if (!ai || !ai.name) return { ...base, sector: secName, ...richFallback, bio: `${base.bio} · ${secName}` };
   const handle = String(ai.handle || '').replace(/[^A-Za-z0-9]/g, '') || base.handle;
   const children = Array.isArray(ai.children) ? ai.children.slice(0, 6).map(c => ({ name: String(c.name || '').slice(0, 40), age: Number(c.age) || null })).filter(c => c.name) : richFallback.children;
+  const str = (v, n) => String(v || '').slice(0, n);
   return {
     name: String(ai.name).slice(0, 60) || base.name,
     gender: base.gender,
     first_en: base.first_en, last_en: base.last_en,
     handle: handle.slice(0, 40),
     sector: secName,
-    bio: String(ai.bio || base.bio).slice(0, 400),
-    avatar_hint: String(ai.avatar_hint || '').slice(0, 200),
-    style: String(ai.style || base.style).slice(0, 120),
-    residence: String(ai.residence || richFallback.residence).slice(0, 60),
-    marital_status: String(ai.marital_status || richFallback.marital_status).slice(0, 40),
-    workplace: String(ai.workplace || richFallback.workplace).slice(0, 80),
-    children
+    age: Number(ai.age) || null,
+    bio: str(ai.bio || base.bio, 400),
+    avatar_hint: str(ai.avatar_hint, 200),
+    style: str(ai.style || base.style, 120),
+    residence: str(ai.residence || richFallback.residence, 60),
+    marital_status: str(ai.marital_status || richFallback.marital_status, 40),
+    workplace: str(ai.workplace || richFallback.workplace, 80),
+    children,
+    personality: str(ai.personality, 300),
+    inner_conflict: str(ai.inner_conflict, 300),
+    central_conflict: str(ai.central_conflict, 300),
+    online_style: str(ai.online_style, 400),
+    topics: Array.isArray(ai.topics) ? ai.topics.map(x => String(x).slice(0, 60)).slice(0, 10) : []
   };
 }
 
@@ -391,6 +411,11 @@ async function createOne(strategy, options) {
   persona.avatar_url = avatarUrl;
   persona.show_avatar = Math.random() < 0.70;
   const profileUrl = (persona.show_avatar && avatarUrl) ? avatarUrl : null;
+
+  // אסטרטגיית קבלת הימורים: מגיב על הצעה שקיבל אחרי A..B דקות, ומקבל בהסתברות accept_rate%
+  persona.accept_min = 1;
+  persona.accept_max = 600;
+  persona.accept_rate = 50 + rnd(41); // 50-90%
 
   const ins = await db.run(
     `INSERT INTO users (email, name, phone_number, profile_image_url, password_hash, is_admin, is_guest, can_guess_groups)
@@ -606,6 +631,10 @@ async function updateOne(userId, fields) {
   if (f.avatar_hint !== undefined) p.avatar_hint = String(f.avatar_hint).slice(0, 200);
   if (f.email_as_name !== undefined) p.email_as_name = !!f.email_as_name;
   if (f.show_avatar !== undefined) p.show_avatar = !!f.show_avatar;
+  if (f.accept_min !== undefined) p.accept_min = clamp(Math.trunc(Number(f.accept_min) || 0), 0, 100000);
+  if (f.accept_max !== undefined) p.accept_max = clamp(Math.trunc(Number(f.accept_max) || 0), 0, 100000);
+  if (f.accept_rate !== undefined) p.accept_rate = clamp(Math.trunc(Number(f.accept_rate) || 0), 0, 100);
+  if (f.bio !== undefined) p.bio = String(f.bio).slice(0, 400);
   if (typeof f.persona === 'object' && f.persona) Object.assign(p, f.persona);
 
   const urow = await db.one('SELECT email, name, profile_image_url FROM users WHERE id = ?', [id]);
@@ -781,6 +810,58 @@ async function organicVote(bot) {
   return 1;
 }
 
+// hash דטרמיניסטי לבחירת זמן-תגובה והחלטת קבלה יציבים לכל הצעה
+function hashInt(n) { let h = (Math.trunc(n) * 2654435761) >>> 0; return h; }
+
+// מעבד הצעות הימור פתוחות המיועדות לבוטים מאופשרים: אחרי A..B דק׳ הבוט מגיב — מקבל ב-accept_rate% או דוחה (מבטל ומחזיר ליוצר)
+async function acceptBetTick() {
+  await ensureSchema();
+  const bets = await db.query(`
+    SELECT b.id, b.match_id, b.stake, b.creator_id, b.target_user_id, b.max_acceptors, b.created_at,
+           s.persona, m.kickoff, m.status AS match_status
+    FROM coin_bets b
+    JOIN sim_users s ON s.user_id = b.target_user_id AND s.enabled = 1
+    JOIN matches m ON m.id = b.match_id
+    WHERE b.status = 'open' AND b.accepted_count = 0 AND b.target_user_id IS NOT NULL`);
+  if (!bets.length) return { accepted: 0, rejected: 0, considered: 0 };
+  const lockH = Number(await simSetting('lock_hours_before', 1)) || 1;
+  let accepted = 0, rejected = 0;
+  for (const b of bets) {
+    try {
+      if (b.match_status === 'finished') continue;
+      if (Date.now() >= kickoffMs(b.kickoff) - lockH * 3600 * 1000) continue; // נעול — נשאיר
+      const p = parsePersona(b.persona);
+      const A = Number(p.accept_min) || 1, B = Number(p.accept_max) || 600;
+      const rate = Number.isFinite(Number(p.accept_rate)) ? Number(p.accept_rate) : 65;
+      const T = A + (hashInt(b.id) % Math.max(1, B - A + 1)); // זמן תגובה בדקות
+      const ageMin = (Date.now() - new Date(`${String(b.created_at).replace(' ', 'T')}Z`).getTime()) / 60000;
+      if (ageMin < T) continue; // עוד לא הגיע זמן התגובה
+      const botId = b.target_user_id;
+      const accept = (hashInt(b.id * 7 + 3) % 100) < rate;
+      if (accept) {
+        const bal = await ensureWallet(botId);
+        if (bal < b.stake) continue; // אין מספיק — ימתין
+        const done = await db.tx(async (t) => {
+          const upd = await t.run("UPDATE coin_bets SET accepted_count = accepted_count + 1 WHERE id = ? AND status = 'open' AND accepted_count < max_acceptors", [b.id]);
+          if (!upd.affectedRows) return false;
+          await t.run('INSERT INTO coin_bet_participants (bet_id, opponent_id, stake) VALUES (?, ?, ?)', [b.id, botId, b.stake]);
+          await adjust(t, botId, -b.stake, 'bet_stake', b.id);
+          await t.run("UPDATE coin_bets SET status = 'matched' WHERE id = ? AND status = 'open' AND accepted_count >= max_acceptors", [b.id]);
+          return true;
+        });
+        if (done) accepted += 1;
+      } else {
+        await db.tx(async (t) => {
+          const upd = await t.run("UPDATE coin_bets SET status = 'cancelled' WHERE id = ? AND status = 'open' AND accepted_count = 0", [b.id]);
+          if (upd.affectedRows) await adjust(t, b.creator_id, b.stake * Number(b.max_acceptors || 1), 'bet_cancel_refund', b.id);
+        });
+        rejected += 1;
+      }
+    } catch (e) { console.error('acceptBetTick:', e.message); }
+  }
+  return { accepted, rejected, considered: bets.length };
+}
+
 // טיק אחד: מספר בוטים פעילים מבצעים פעולה קטנה אקראית
 async function organicTick(opts = {}) {
   await ensureSchema();
@@ -803,4 +884,4 @@ async function organicTick(opts = {}) {
   return { acted, bots: max };
 }
 
-module.exports = { startBatch, listSim, removeSim, removeAll, strategies, sectorsList, ensureSchema, getOne, updateOne, setEnabled, bulkAction, regenerateAvatar, history, organicTick };
+module.exports = { startBatch, listSim, removeSim, removeAll, strategies, sectorsList, ensureSchema, getOne, updateOne, setEnabled, bulkAction, regenerateAvatar, history, organicTick, acceptBetTick };

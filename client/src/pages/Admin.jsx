@@ -326,6 +326,7 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
   const [regen, setRegen] = useState(false);
   const [img, setImg] = useState('');
   const [history, setHistory] = useState(null);
+  const [reviews, setReviews] = useState(null);
 
   useEffect(() => {
     api.get(`/admin/simulate/${id}`).then(r => {
@@ -334,6 +335,8 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
         name: r.data.name || '', phone_number: r.data.phone_number || '', email: r.data.email || '',
         strategy: r.data.strategy, enabled: r.data.enabled, email_as_name: !!r.data.persona?.email_as_name,
         show_avatar: r.data.persona?.show_avatar !== false,
+        accept_min: r.data.persona?.accept_min ?? 1, accept_max: r.data.persona?.accept_max ?? 600,
+        accept_rate: r.data.persona?.accept_rate ?? 65,
         bio: r.data.persona?.bio || '', style: r.data.persona?.style || '', avatar_hint: r.data.persona?.avatar_hint || ''
       });
       setImg(r.data.persona?.avatar_url || r.data.profile_image_url || '');
@@ -356,6 +359,24 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
 
   const loadHistory = async () => {
     try { const { data } = await api.get(`/admin/simulate/${id}/history`); setHistory(data.events || []); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+
+  const loadReviews = async () => {
+    try { const { data } = await api.get(`/admin/users/${id}/reviews`); setReviews(data || []); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+  const saveReview = async (r, body) => {
+    try { await api.patch(`/admin/reviews/${r.id}`, { body }); loadReviews(); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+  const toggleReview = async (r) => {
+    try { await api.patch(`/admin/reviews/${r.id}`, { status: r.status === 'published' ? 'draft' : 'published' }); loadReviews(); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+  const deleteReview = async (r) => {
+    if (!confirm('למחוק את הריביו?')) return;
+    try { await api.delete(`/admin/reviews/${r.id}`); loadReviews(); }
     catch (e) { setMsg(errMsg(e)); }
   };
 
@@ -404,22 +425,56 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
         <label style={{ display: 'block', marginTop: 10 }}>ביו<textarea rows="3" value={form.bio} onChange={e => upd('bio', e.target.value)} style={{ ...inputStyle('100%'), display: 'block' }} /></label>
         <label style={{ display: 'block' }}>סגנון ניחוש<input value={form.style} onChange={e => upd('style', e.target.value)} style={inputStyle('100%')} /></label>
 
-        {bot.persona && (bot.persona.sector || bot.persona.residence) && (
+        <div style={{ marginTop: 10, padding: 10, border: '1px solid var(--paper-dim)', borderRadius: 8 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>קבלת הצעות הימור</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <label>תגובה מ-(דק׳)<input type="number" min={0} value={form.accept_min} onChange={e => upd('accept_min', e.target.value)} style={inputStyle(90)} /></label>
+            <label>עד (דק׳)<input type="number" min={0} value={form.accept_max} onChange={e => upd('accept_max', e.target.value)} style={inputStyle(90)} /></label>
+            <label>שיעור קבלה %<input type="number" min={0} max={100} value={form.accept_rate} onChange={e => upd('accept_rate', e.target.value)} style={inputStyle(90)} /></label>
+          </div>
+          <small style={{ color: 'var(--muted)' }}>הבוט יגיב להצעה שקיבל אחרי זמן אקראי בטווח, ויקבל בהסתברות זו (אחרת ידחה ויחזיר ליוצר).</small>
+        </div>
+
+        {bot.persona && (bot.persona.sector || bot.persona.residence || bot.persona.personality) && (
           <div style={{ marginTop: 10, padding: 10, background: 'var(--paper-dim)', borderRadius: 8, fontSize: 13, display: 'grid', gap: 3 }}>
             {bot.persona.sector && <div><b>מגזר:</b> {bot.persona.sector}</div>}
+            {bot.persona.age && <div><b>גיל:</b> {bot.persona.age}</div>}
             {bot.persona.residence && <div><b>מגורים:</b> {bot.persona.residence}</div>}
             {bot.persona.marital_status && <div><b>מצב משפחתי:</b> {bot.persona.marital_status}</div>}
             {bot.persona.workplace && <div><b>עבודה:</b> {bot.persona.workplace}</div>}
             {Array.isArray(bot.persona.children) && bot.persona.children.length > 0 &&
               <div><b>ילדים:</b> {bot.persona.children.map(c => `${c.name}${c.age ? ` (${c.age})` : ''}`).join(', ')}</div>}
+            {bot.persona.personality && <div><b>אישיות:</b> {bot.persona.personality}</div>}
+            {bot.persona.inner_conflict && <div><b>מתח פנימי:</b> {bot.persona.inner_conflict}</div>}
+            {bot.persona.central_conflict && <div><b>קונפליקט מרכזי:</b> {bot.persona.central_conflict}</div>}
+            {bot.persona.online_style && <div><b>סגנון כתיבה:</b> {bot.persona.online_style}</div>}
+            {Array.isArray(bot.persona.topics) && bot.persona.topics.length > 0 && <div><b>נושאים:</b> {bot.persona.topics.join(', ')}</div>}
             {bot.persona.shadow_name && <div><b>מהמר הפוך מ:</b> {bot.persona.shadow_name}</div>}
           </div>
         )}
 
-        <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-gold" onClick={save} disabled={busy}>{busy ? 'שומר…' : 'שמירה'}</button>
           <button className="btn btn-outline" onClick={loadHistory}>היסטוריית מעשים</button>
+          <button className="btn btn-outline" onClick={loadReviews}>ניהול ריביוים</button>
         </div>
+
+        {reviews && (
+          <div style={{ marginTop: 12, maxHeight: 260, overflowY: 'auto', borderTop: '1px solid var(--paper-dim)', paddingTop: 8 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>ריביוים ({reviews.length})</div>
+            {reviews.length === 0 ? <div style={{ color: 'var(--muted)' }}>אין ריביוים</div> : reviews.map(r => (
+              <div key={r.id} style={{ borderBottom: '1px solid var(--paper-dim)', padding: '6px 0', opacity: r.status === 'published' ? 1 : 0.5 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.home}–{r.away} · {ilDateTime(r.created_at)} · {r.status === 'published' ? 'מפורסם' : 'מושבת'}</div>
+                <textarea defaultValue={r.body} rows="2" style={{ ...inputStyle('100%'), display: 'block', marginTop: 4 }}
+                  onBlur={e => { if (e.target.value.trim() && e.target.value !== r.body) saveReview(r, e.target.value.trim()); }} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button className="btn btn-sm btn-outline" onClick={() => toggleReview(r)}>{r.status === 'published' ? 'השבת' : 'פרסם'}</button>
+                  <button className="btn btn-sm btn-outline" style={{ color: 'var(--crimson)' }} onClick={() => deleteReview(r)}>מחק</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {history && (
           <div style={{ marginTop: 12, maxHeight: 220, overflowY: 'auto', borderTop: '1px solid var(--paper-dim)', paddingTop: 8 }}>
@@ -834,7 +889,7 @@ function UsersTab() {
             {users.map(u => (
               <tr key={u.id}>
                 <td>{u.id}</td>
-                <td><strong>{u.name}</strong></td>
+                <td><strong>{u.is_sim && <span title="בוט סימולציה">🤖 </span>}{u.name}</strong></td>
                 <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{u.email}</td>
                 <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{u.phone_number || '—'}</td>
                 <td style={{ fontSize: 13 }}>{u.department || '—'}</td>

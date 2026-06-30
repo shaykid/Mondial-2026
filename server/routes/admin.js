@@ -532,12 +532,14 @@ router.get('/overview', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const rows = await db.query(`
-      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.publish_prediction, u.gender, u.role, u.created_at,
-        (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions
+      SELECT u.id, u.email, u.name, u.phone_number, u.department, u.is_admin, u.can_guess_groups, u.publish_prediction, u.gender, u.role, u.created_at, u.last_login_at,
+        (SELECT COUNT(*) FROM predictions WHERE user_id = u.id) AS num_predictions,
+        EXISTS(SELECT 1 FROM sim_users s WHERE s.user_id = u.id) AS is_sim
       FROM users u
       WHERE u.is_guest = 0
       ORDER BY u.id DESC
     `);
+    rows.forEach(r => { r.is_sim = !!Number(r.is_sim); });
     res.json(rows);
   } catch (e) {
     console.error('admin/users:', e);
@@ -1760,6 +1762,59 @@ router.post('/simulate/bulk', async (req, res) => {
   if (!fullAdminOnly(req, res)) return;
   try { res.json(await simulate.bulkAction(req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }
+});
+
+// ריביוים של משתמש/בוט (לעריכה/השבתה מתוך מסך הניהול)
+router.get('/users/:id/reviews', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'מזהה לא תקין' });
+    const rows = await db.query(`
+      SELECT r.id, r.match_id, r.body, r.status, r.created_at,
+             COALESCE(ht.name_he, m.home_label_he, m.home_code) AS home,
+             COALESCE(at.name_he, m.away_label_he, m.away_code) AS away
+      FROM match_reviews r
+      JOIN matches m ON m.id = r.match_id
+      LEFT JOIN teams ht ON ht.code = m.home_code
+      LEFT JOIN teams at ON at.code = m.away_code
+      WHERE r.user_id = ? ORDER BY r.created_at DESC`, [id]);
+    res.json(rows);
+  } catch (e) {
+    console.error('admin/user-reviews:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+// עריכה/השבתה/מחיקה של ריביו ע"י מנהל
+router.patch('/reviews/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const fields = {};
+    if (req.body?.body !== undefined) fields.body = String(req.body.body).trim();
+    if (req.body?.status !== undefined && ['published', 'draft'].includes(req.body.status)) fields.status = req.body.status;
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'אין מה לעדכן' });
+    const sets = []; const vals = [];
+    if (fields.body !== undefined) { sets.push('body = ?'); vals.push(fields.body); }
+    if (fields.status !== undefined) { sets.push('status = ?'); vals.push(fields.status); }
+    vals.push(id);
+    const r = await db.run(`UPDATE match_reviews SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, vals);
+    if (!r.affectedRows) return res.status(404).json({ error: 'ריביו לא נמצא' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('admin/review-patch:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+router.delete('/reviews/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const r = await db.run('DELETE FROM match_reviews WHERE id = ?', [id]);
+    res.json({ ok: true, deleted: r.affectedRows });
+  } catch (e) {
+    console.error('admin/review-delete:', e);
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
 });
 
 router.get('/simulate/:id/history', async (req, res) => {

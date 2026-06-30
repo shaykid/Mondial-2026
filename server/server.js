@@ -206,6 +206,13 @@ cron.schedule('*/20 * * * *', () => {
     .catch((e) => console.error('   ✗ פעילות בוטים נכשלה:', e.message));
 }, { timezone: 'Asia/Jerusalem' });
 
+// בוטים מגיבים להצעות הימור שקיבלו (אחרי A..B דק׳, לפי accept_rate) — כל 2 דק׳
+cron.schedule('*/2 * * * *', () => {
+  require('./services/simulate').acceptBetTick()
+    .then((r) => { if (r && (r.accepted || r.rejected)) console.log(`   🤝 בוטים הגיבו להצעות: ${r.accepted} אושרו, ${r.rejected} נדחו`); })
+    .catch((e) => console.error('   ✗ תגובת בוטים להצעות נכשלה:', e.message));
+}, { timezone: 'Asia/Jerusalem' });
+
 const PORT = process.env.PORT || 4026;
 
 // המתנה לחיבור DB לפני האזנה
@@ -220,6 +227,11 @@ const PORT = process.env.PORT || 4026;
 
   // ודא שטבלת sim_users קיימת — נתיבי הציבור (לוח, שיחים, ריביוים) מסננים לפיה
   try { await require('./services/simulate').ensureSchema(); } catch (e) { console.error('sim ensureSchema:', e.message); }
+  // ודא עמודות תיעוד-כניסה (last_login_at) — נתיב הניהול מסתמך עליהן
+  try {
+    const col = await db.one("SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'last_login_at'");
+    if (!col?.n) { await db.run('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL'); await db.run('ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(64) NULL'); }
+  } catch (e) { console.error('last_login ensure:', e.message); }
 
   app.listen(PORT, () => {
     const mode = (process.env.SCRAPER_MODE || 'manual').padEnd(28);
