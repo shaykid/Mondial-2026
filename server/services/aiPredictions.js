@@ -114,37 +114,20 @@ async function callOpenAI(prompt) {
 const TYPES = ['exact_score', 'betting_tip', 'probability_model', 'editorial_opinion'];
 const CONF = ['low', 'medium', 'high'];
 
-// מייצר ושומר ניחושי AI ל-N המשחקים הקרובים. מחזיר סיכום.
-async function generateForNextMatches(limit = 5, force = false) {
-  const all = await upcomingMatches(limit);
-  if (!all.length) return { ok: true, matches: 0, note: 'no upcoming matches' };
-
-  // דלג על משחקים שכבר יש להם ניחושים (אלא אם force) — לא לבצע fetch מחדש
-  let fixtures = all;
-  if (!force) {
-    const have = await db.query(
-      `SELECT DISTINCT match_id FROM match_ai_predictions WHERE match_id IN (${all.map(() => '?').join(',')})`,
-      all.map(f => f.id)
-    );
-    const haveSet = new Set(have.map(r => r.match_id));
-    fixtures = all.filter(f => !haveSet.has(f.id));
-  }
-  if (!fixtures.length) return { ok: true, matches: 0, skipped: all.length, note: 'all already have predictions' };
-
-  const validIds = new Set(fixtures.map(f => f.id));
-  const resp = await callOpenAI(buildPrompt(fixtures));
+// שומר תוצאת AI עבור מנה אחת של משחקים (קריאת OpenAI אחת). מחזיר {stored, sources}.
+async function storeBatch(batch) {
+  const validIds = new Set(batch.map(f => f.id));
+  const resp = await callOpenAI(buildPrompt(batch));
   const data = parseJson(extractText(resp));
   if (!data || !Array.isArray(data.matches)) {
     const e = new Error('AI לא החזיר JSON תקין'); e.code = 'BAD_JSON'; throw e;
   }
-
   let stored = 0, sources = 0;
   for (const m of data.matches) {
     const mid = Number(m.match_id);
     if (!validIds.has(mid)) continue;
     const preds = Array.isArray(m.predictions) ? m.predictions.slice(0, 4) : [];
     const cons = m.consensus || {};
-
     await db.tx(async (t) => {
       await t.run('DELETE FROM match_ai_predictions WHERE match_id = ?', [mid]);
       let slot = 0;
@@ -177,7 +160,71 @@ async function generateForNextMatches(limit = 5, force = false) {
     });
     stored++;
   }
-  return { ok: true, matches: stored, sources, notes: data.missing_data_notes || [] };
+  return { stored, sources };
+}
+
+// ליבה: מייצר ושומר ניחושי AI לרשימת fixtures (מחולק למנות של 5 כדי לא להעמיס קריאה אחת).
+async function generateForFixtures(all, force = false) {
+  if (!all.length) return { ok: true, matches: 0, note: 'no matches' };
+  let fixtures = all;
+  if (!force) {
+    const have = await db.query(
+      `SELECT DISTINCT match_id FROM match_ai_predictions WHERE match_id IN (${all.map(() => '?').join(',')})`,
+      all.map(f => f.id)
+    );
+    const haveSet = new Set(have.map(r => r.match_id));
+    fixtures = all.filter(f => !haveSet.has(f.id));
+  }
+  if (!fixtures.length) return { ok: true, matches: 0, skipped: all.length, note: 'all already have predictions' };
+
+  let stored = 0, sources = 0; const notes = [];
+  for (let i = 0; i < fixtures.length; i += 5) {
+    const batch = fixtures.slice(i, i + 5);
+    try {
+      const r = await storeBatch(batch);
+      stored += r.stored; sources += r.sources;
+    } catch (e) {
+      notes.push(`batch ${i / 5 | 0} (${batch.map(f => f.id).join(',')}): ${e.message}`);
+    }
+  }
+  return { ok: true, matches: stored, sources, notes };
+}
+
+// מייצר ושומר ניחושי AI ל-N המשחקים הקרובים. מחזיר סיכום.
+async function generateForNextMatches(limit = 5, force = false) {
+  const all = await upcomingMatches(limit);
+  if (!all.length) return { ok: true, matches: 0, note: 'no upcoming matches' };
+  return generateForFixtures(all, force);
+}
+
+// משחקים לפי מזהים (ללא תלות בסטטוס/זמן) — לייצור ניחושים לשלב מסוים (למשל 32 האחרונות)
+async function fixturesByIds(ids) {
+  const list = (ids || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (!list.length) return [];
+  return db.query(
+    `SELECT m.id, m.kickoff, m.home_code, m.away_code,
+            COALESCE(th.name_en, m.home_label_en, m.home_code) AS home_en,
+            COALESCE(ta.name_en, m.away_label_en, m.away_code) AS away_en,
+            COALESCE(th.name_he, m.home_label_he, m.home_code) AS home_he,
+            COALESCE(ta.name_he, m.away_label_he, m.away_code) AS away_he
+       FROM matches m
+       LEFT JOIN teams th ON th.code = m.home_code
+       LEFT JOIN teams ta ON ta.code = m.away_code
+      WHERE m.id IN (${list.join(',')})
+      ORDER BY m.kickoff ASC`
+  );
+}
+
+// מייצר ניחושי AI לרשימת מזהי משחקים (ברירת מחדל force=true — מרענן גם קיימים)
+async function generateForMatchIds(ids, force = true) {
+  const fx = await fixturesByIds(ids);
+  return generateForFixtures(fx, force);
+}
+
+// כל מזהי המשחקים בשלב נתון (למשל 'round_of_32')
+async function matchIdsByStage(stage) {
+  const rows = await db.query('SELECT id FROM matches WHERE stage = ? ORDER BY kickoff ASC', [stage]);
+  return rows.map(r => r.id);
 }
 
 // כל ניחושי ה-AI מקובצים לפי match_id (לתצוגת הכפתורים)
@@ -247,4 +294,4 @@ async function hebrewizeExisting() {
   return { ok: true, changed };
 }
 
-module.exports = { generateForNextMatches, generateDaily, getAllActive, hebrewizeExisting };
+module.exports = { generateForNextMatches, generateForMatchIds, matchIdsByStage, generateDaily, getAllActive, hebrewizeExisting };
