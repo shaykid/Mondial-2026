@@ -1173,6 +1173,28 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
   color: var(--pitch-deep);
 }
 
+/* תג "Powered by Hinbit" קבוע בפינה שמאלית-תחתונה (כמו הלוגו בפינה השמאלית-עליונה במולטי-דב) */
+.hinbit-powered {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(8, 15, 29, 0.82);
+  border: 1px solid rgba(148,163,184,0.22);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+  text-decoration: none;
+  color: #e5eef8;
+  backdrop-filter: blur(12px);
+}
+.hinbit-powered img { width: 22px; height: 22px; display: block; object-fit: contain; }
+.hinbit-powered span { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+@media (max-width: 600px) { .hinbit-powered span { display: none; } .hinbit-powered { padding: 8px; } }
+
 .doc-modal-backdrop,
 .admin-modal-backdrop {
   position: fixed;
@@ -2047,13 +2069,17 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.02em; }
 .header-brand-name {
   font-family: var(--font-display, inherit);
   font-weight: 800;
-  font-size: 20px;
+  font-size: 52px;            /* 2.6× the previous 20px */
+  line-height: 1;
   color: var(--gold);
   letter-spacing: 0.5px;
   white-space: nowrap;
   margin-inline-end: 4px;
 }
-@media (max-width: 600px) { .header-brand-name { font-size: 16px; } }
+@media (max-width: 600px) { .header-brand-name { font-size: 42px; } }
+
+/* דחיפת לוגו הינביט לצד שמאל של מקבץ המותג */
+.header-logo-left { margin-inline-start: auto; }
 
 /* כרטיס שיחים בבית: רווח/הפסד 24 שעות */
 .stat-card .stat-sub { font-size: 12px; font-weight: 700; margin-top: 2px; }

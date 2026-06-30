@@ -1751,6 +1751,28 @@ router.delete('/simulate/:id', async (req, res) => {
   }
 });
 
+router.get('/simulate/:id/history', async (req, res) => {
+  try { res.json(await simulate.history(req.params.id)); }
+  catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }
+});
+
+router.get('/simulate/:id', async (req, res) => {
+  try { res.json(await simulate.getOne(req.params.id)); }
+  catch (e) { res.status(404).json({ error: e.message || 'לא נמצא' }); }
+});
+
+router.patch('/simulate/:id', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try { res.json(await simulate.updateOne(req.params.id, req.body || {})); }
+  catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }
+});
+
+router.post('/simulate/:id/regenerate-avatar', async (req, res) => {
+  if (!fullAdminOnly(req, res)) return;
+  try { res.json(await simulate.regenerateAvatar(req.params.id, req.body?.prompt)); }
+  catch (e) { res.status(400).json({ error: e.message || 'שגיאה' }); }
+});
+
 // סריקת משחקים זמינים מה-web והוספתם למסד הנתונים
 router.post('/scan-fixtures-now', async (req, res) => {
   try {

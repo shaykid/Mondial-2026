@@ -115,6 +115,11 @@ export default function SiteFooter() {
         ))}
       </footer>
 
+      <a className="hinbit-powered" href="https://hinbit.com" target="_blank" rel="noreferrer" dir="ltr">
+        <img src="https://hinbit.com/hebrew_site/hinbit-logo-symbol.png" alt="Hinbit" />
+        <span>Powered by Hinbit Development</span>
+      </a>
+
       {doc && (
         <div className="doc-modal-backdrop" onClick={() => !showConsent && setDoc(null)}>
           <div className="doc-modal" onClick={(e) => e.stopPropagation()}>

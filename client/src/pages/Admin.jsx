@@ -79,6 +79,7 @@ function SimulateTab() {
   const [progress, setProgress] = useState({ running: false, total: 0, done: 0, failed: 0 });
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState(null);
 
   const load = async () => {
     try {
@@ -86,6 +87,11 @@ function SimulateTab() {
       setList(data.users || []);
       setProgress(data.progress || { running: false });
     } catch (e) { /* */ }
+  };
+
+  const toggleEnabled = async (u) => {
+    try { await api.patch(`/admin/simulate/${u.user_id}`, { enabled: !u.enabled }); load(); }
+    catch (e) { setMsg(errMsg(e)); }
   };
 
   useEffect(() => {
@@ -170,16 +176,16 @@ function SimulateTab() {
           <thead>
             <tr>
               <th>שם</th><th>אסטרטגיה</th><th>טלפון</th><th>אימייל</th>
-              <th>ניחושים</th><th>ריביוים</th><th>לייקים</th><th>הצעות</th><th>שיחים</th><th></th>
+              <th>ניחושים</th><th>ריביוים</th><th>לייקים</th><th>הצעות</th><th>שיחים</th><th>סטטוס</th><th></th>
             </tr>
           </thead>
           <tbody>
             {list.map(u => (
-              <tr key={u.user_id}>
+              <tr key={u.user_id} style={{ opacity: u.enabled ? 1 : 0.5 }}>
                 <td style={{ fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>
                   {u.profile_image_url
-                    ? <img src={u.profile_image_url} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
-                    : <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--paper-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{(u.name || '?').slice(0, 1)}</span>}
+                    ? <img src={u.profile_image_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                    : <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--paper-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{(u.name || '?').slice(0, 1)}</span>}
                   {u.name}
                 </td>
                 <td>{u.strategy_he}</td>
@@ -190,12 +196,122 @@ function SimulateTab() {
                 <td>{u.likes}</td>
                 <td>{u.suggestions}</td>
                 <td>{u.balance?.toLocaleString?.() ?? u.balance}</td>
-                <td><button className="btn btn-sm btn-outline" style={{ color: 'var(--crimson)' }} onClick={() => removeOne(u.user_id)}>מחק</button></td>
+                <td>
+                  <button className={`toggle-pill ${u.enabled ? 'on' : ''}`} style={{ fontSize: 12 }}
+                    onClick={() => toggleEnabled(u)}>{u.enabled ? 'פעיל' : 'מושבת'}</button>
+                </td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn btn-sm btn-gold" onClick={() => setEditId(u.user_id)}>ערוך</button>{' '}
+                  <button className="btn btn-sm btn-outline" style={{ color: 'var(--crimson)' }} onClick={() => removeOne(u.user_id)}>מחק</button>
+                </td>
               </tr>
             ))}
-            {list.length === 0 && <tr><td colSpan={10} style={{ color: 'var(--muted)' }}>אין עדיין בוטים — צור כמה למעלה.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={11} style={{ color: 'var(--muted)' }}>אין עדיין בוטים — צור כמה למעלה.</td></tr>}
           </tbody>
         </table>
+      </div>
+
+      {editId && <BotEditModal id={editId} strategies={strategies} onClose={() => setEditId(null)} onSaved={load} />}
+    </div>
+  );
+}
+
+/* ─────────────── פופאפ עריכת בוט ─────────────── */
+function BotEditModal({ id, strategies, onClose, onSaved }) {
+  const [bot, setBot] = useState(null);
+  const [form, setForm] = useState({});
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [imgPrompt, setImgPrompt] = useState('');
+  const [regen, setRegen] = useState(false);
+  const [img, setImg] = useState('');
+  const [history, setHistory] = useState(null);
+
+  useEffect(() => {
+    api.get(`/admin/simulate/${id}`).then(r => {
+      setBot(r.data);
+      setForm({
+        name: r.data.name || '', phone_number: r.data.phone_number || '', email: r.data.email || '',
+        strategy: r.data.strategy, enabled: r.data.enabled,
+        bio: r.data.persona?.bio || '', style: r.data.persona?.style || '', avatar_hint: r.data.persona?.avatar_hint || ''
+      });
+      setImg(r.data.profile_image_url || '');
+    }).catch(e => setMsg(errMsg(e)));
+  }, [id]);
+
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setBusy(true); setMsg('');
+    try { await api.patch(`/admin/simulate/${id}`, form); onSaved && onSaved(); onClose(); }
+    catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  const regenerate = async () => {
+    setRegen(true); setMsg('');
+    try { const { data } = await api.post(`/admin/simulate/${id}/regenerate-avatar`, { prompt: imgPrompt }); setImg(data.profile_image_url + '?t=' + Date.now()); onSaved && onSaved(); }
+    catch (e) { setMsg(errMsg(e)); } finally { setRegen(false); }
+  };
+
+  const loadHistory = async () => {
+    try { const { data } = await api.get(`/admin/simulate/${id}/history`); setHistory(data.events || []); }
+    catch (e) { setMsg(errMsg(e)); }
+  };
+
+  if (!bot) return null;
+  return (
+    <div className="admin-modal-backdrop" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 620 }}>
+        <div className="admin-modal-head">
+          <h3>עריכת בוט · {bot.name}</h3>
+          <button className="btn btn-sm btn-outline" onClick={onClose}>סגור</button>
+        </div>
+        {msg && <div className="alert alert-error">{msg}</div>}
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ textAlign: 'center' }}>
+            {img
+              ? <img src={img} alt="" style={{ width: 120, height: 120, borderRadius: 12, objectFit: 'cover' }} />
+              : <div style={{ width: 120, height: 120, borderRadius: 12, background: 'var(--paper-dim)', display: 'grid', placeItems: 'center' }}>{(bot.name || '?').slice(0, 1)}</div>}
+            <div style={{ marginTop: 8 }}>
+              <input placeholder="פרומפט לתמונה (אופציונלי)" value={imgPrompt} onChange={e => setImgPrompt(e.target.value)} style={inputStyle(170)} />
+              <button className="btn btn-sm btn-pitch" style={{ marginTop: 6 }} onClick={regenerate} disabled={regen}>{regen ? 'מייצר…' : 'צור פרצוף חדש'}</button>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, minWidth: 240, display: 'grid', gap: 8 }}>
+            <label>שם<input value={form.name} onChange={e => upd('name', e.target.value)} style={inputStyle('100%')} /></label>
+            <label>טלפון<input dir="ltr" value={form.phone_number} onChange={e => upd('phone_number', e.target.value)} style={inputStyle('100%')} /></label>
+            <label>אימייל<input dir="ltr" value={form.email} onChange={e => upd('email', e.target.value)} style={inputStyle('100%')} /></label>
+            <label>אסטרטגיה
+              <select value={form.strategy} onChange={e => upd('strategy', e.target.value)} style={inputStyle('100%')}>
+                {(strategies || []).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!form.enabled} onChange={e => upd('enabled', e.target.checked)} /> פעיל (מופיע בטבלה החיה)
+            </label>
+          </div>
+        </div>
+
+        <label style={{ display: 'block', marginTop: 10 }}>ביו<textarea rows="2" value={form.bio} onChange={e => upd('bio', e.target.value)} style={{ ...inputStyle('100%'), display: 'block' }} /></label>
+        <label style={{ display: 'block' }}>סגנון ניחוש<input value={form.style} onChange={e => upd('style', e.target.value)} style={inputStyle('100%')} /></label>
+
+        <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+          <button className="btn btn-gold" onClick={save} disabled={busy}>{busy ? 'שומר…' : 'שמירה'}</button>
+          <button className="btn btn-outline" onClick={loadHistory}>היסטוריית מעשים</button>
+        </div>
+
+        {history && (
+          <div style={{ marginTop: 12, maxHeight: 220, overflowY: 'auto', borderTop: '1px solid var(--paper-dim)', paddingTop: 8 }}>
+            {history.length === 0 ? <div style={{ color: 'var(--muted)' }}>אין פעולות עדיין</div> : history.map((e, i) => (
+              <div key={i} style={{ fontSize: 13, padding: '3px 0', display: 'flex', gap: 8 }}>
+                <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>{ilDateTime(e.at)}</span>
+                <span>{e.type === 'bet' ? '🎯' : e.type === 'review' ? '🎙️' : e.type === 'like' ? '❤️' : '💰'} {e.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

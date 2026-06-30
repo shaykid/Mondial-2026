@@ -21,12 +21,12 @@ export default function Header() {
 
         <div className="header-right-brand">
           {coinsEnabled && <span className="header-brand-name">הינביט-מרקט</span>}
-          <img className="header-logo-large" src="/theme-assets/logo-header.png" alt="Hinbit logo" />
           {user?.profile_image_url ? (
             <img className="header-avatar" src={user.profile_image_url} alt={user.name} />
           ) : (
             <div className="header-avatar header-avatar-fallback">{(user?.name || '?').slice(0, 1)}</div>
           )}
+          <img className="header-logo-large header-logo-left" src="/theme-assets/logo-header.png" alt="Hinbit logo" />
         </div>
 
         {user.isGuest ? (

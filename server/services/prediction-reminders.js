@@ -174,7 +174,8 @@ const PREDICTIONS_IN_WINDOW_SQL = `
   JOIN matches m  ON m.id = p.match_id
   LEFT JOIN teams ht ON ht.code = m.home_code
   LEFT JOIN teams at ON at.code = m.away_code
-  WHERE u.is_guest = 0 AND u.email IS NOT NULL AND u.email <> '' AND u.email NOT LIKE '%@sim.local'
+  WHERE u.is_guest = 0 AND u.email IS NOT NULL AND u.email <> ''
+    AND NOT EXISTS (SELECT 1 FROM sim_users sx WHERE sx.user_id = u.id)
     AND m.status <> 'finished'
     AND m.kickoff >= ? AND m.kickoff < ?
   ORDER BY u.id ASC, m.kickoff ASC, m.id ASC

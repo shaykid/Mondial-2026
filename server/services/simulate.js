@@ -21,10 +21,22 @@ const STRATEGIES = {
 };
 const STRATEGY_KEYS = Object.keys(STRATEGIES);
 
-// ───────────── מאגרי שמות עבריים (גיבוי ללא-AI) ─────────────
-const HE_FIRST_M = ['דניאל','יוסי','אורי','איתי','נועם','עידו','רון','גיא','עומר','אסף','ניר','תומר','אלון','יובל','עידן','בר','ליאור','מתן','שחר','אדם'];
-const HE_FIRST_F = ['נועה','שירה','מאיה','תמר','יעל','רוני','ליאת','דנה','הילה','אור','גלי','מור','שני','עדן','רותם','אביגיל','ספיר','ענבר','הדר','קרן'];
-const HE_LAST = ['כהן','לוי','מזרחי','פרץ','ביטון','דהן','אברהם','פרידמן','שפירא','אזולאי','גבאי','חדד','אוחיון','מלכה','עמר','בן דוד','רוזן','ברק','גולן','שלום'];
+// ───────────── מאגרי שמות (סגנון תל-אביבי, גיבוי ללא-AI) ─────────────
+// {he, en} כדי לאפשר גם כתובת gmail בלטינית
+const FIRST_F = [['נועה','Noa'],['שירה','Shira'],['יעל','Yael'],['מאיה','Maya'],['רוני','Roni'],['סתיו','Stav'],['אלמה','Alma'],['רומי','Romi'],['ליבי','Libby'],['עדן','Eden'],['אופק','Ofek'],['יהלי','Yahli'],['דריה','Daria'],['רותם','Rotem'],['גאיה','Gaya'],['מיקה','Mika'],['נטע','Neta'],['שני','Shani'],['אור','Or'],['תמר','Tamar']];
+const FIRST_M = [['יותם','Yotam'],['איתי','Itay'],['עידו','Ido'],['אורי','Ori'],['רועי','Roy'],['איתמר','Itamar'],['יונתן','Yonatan'],['עומר','Omer'],['נדב','Nadav'],['איתן','Eitan'],['רום','Rom'],['ארי','Ari'],['ליאו','Leo'],['דניאל','Daniel'],['גיא','Guy'],['עמית','Amit'],['אלון','Alon'],['טל','Tal'],['רן','Ran'],['יואב','Yoav']];
+const LAST = [['כהן','Kohen'],['לוי','Levi'],['שגב','Segev'],['ברקת','Bareket'],['רוזן','Rosen'],['גולן','Golan'],['פלד','Peled'],['רגב','Regev'],['ניר','Nir'],['דרור','Dror'],['שחר','Shahar'],['אלון','Alon'],['נוי','Noy'],['ברנע','Barnea'],['אבן','Even'],['גל','Gal'],['ברק','Barak'],['שלו','Shalev'],['זיו','Ziv'],['רום','Rom']];
+const COOL = ['Power','King','Pro','Star','Goal','TLV','Real','Vibe','Wave','Nova','Max','Prime'];
+const COOL_FIRST = ['Nixon','Rocky','Ace','Neo','Rio','Leo','Ziggy','Coby','Remy','Dash'];
+
+// בחירת מגדר לפי 60% נקבה / 40% זכר
+function pickGender() { return Math.random() < 0.6 ? 'female' : 'male'; }
+function pickName(gender) {
+  const fp = gender === 'female' ? FIRST_F : FIRST_M;
+  const [fHe, fEn] = pick(fp);
+  const [lHe, lEn] = pick(LAST);
+  return { name: `${fHe} ${lHe}`, first_en: fEn, last_en: lEn };
+}
 
 // ───────────── מצב התקדמות (לטבלה החיה) ─────────────
 const state = { running: false, total: 0, done: 0, failed: 0, strategy: null, startedAt: null, lastError: null };
@@ -41,9 +53,15 @@ async function ensureSchema() {
     user_id     INT          NOT NULL PRIMARY KEY,
     strategy    VARCHAR(40)  NOT NULL DEFAULT 'random',
     persona     TEXT         NULL,
+    enabled     TINYINT(1)   NOT NULL DEFAULT 1,
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_sim_users_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  // הוספת עמודת enabled לטבלאות קיימות (MySQL לא תומך ב-ADD COLUMN IF NOT EXISTS)
+  const col = await db.one(
+    "SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'sim_users' AND column_name = 'enabled'"
+  );
+  if (!col) await db.run('ALTER TABLE sim_users ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1');
   schemaReady = true;
 }
 
@@ -69,12 +87,26 @@ async function chatJSON(system, user) {
   } catch (e) { console.error('sim chatJSON:', e.message); return null; }
 }
 
-// מייצר אווטאר ושומר לדיסק. מחזיר URL יחסי או null.
-async function generateAvatar(persona) {
+const VEHICLES = ['a glossy sports car on a coastal road', 'a powerful motorcycle on an open highway', 'a galloping horse in a field at golden hour', 'a speedboat racing across blue water', 'a jet ski throwing up spray', 'a vintage convertible car at sunset'];
+
+// בונה את פרומפט יצירת התמונה. 10% — רכב/בעל-חיים מהיר; השאר — תמונה מתוך אלבום משפחתי (חתוכה לדמות אחת או עם ילדים).
+function avatarPrompt(persona, customPrompt) {
+  if (customPrompt && String(customPrompt).trim()) return String(customPrompt).trim();
+  if (Math.random() < 0.10) {
+    return `A candid, photorealistic real-life snapshot of ${pick(VEHICLES)}, natural daylight, slightly imperfect amateur photo look, shot on a phone camera.`;
+  }
+  const gender = persona?.gender === 'female' ? 'woman' : persona?.gender === 'male' ? 'man' : 'person';
+  const withKids = Math.random() < 0.5
+    ? `the ${gender} together with their kids`
+    : `cropped to just the ${gender} from a larger family photo`;
+  return `A candid real-life family photograph, ${withKids}, Israeli everyday casual style, natural light, looking like a genuine amateur snapshot from a phone (not a studio portrait), photorealistic, slightly imperfect framing. ${persona?.avatar_hint || ''}`.trim();
+}
+
+// מייצר אווטאר ושומר לדיסק. מחזיר URL יחסי או null. customPrompt — פרומפט מותאם (לרענון פנים).
+async function generateAvatar(persona, customPrompt) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
-  const gender = persona?.gender === 'female' ? 'woman' : persona?.gender === 'male' ? 'man' : 'person';
-  const prompt = `A friendly, natural portrait headshot of an Israeli ${gender}, casual everyday style, soft studio lighting, neutral background, photorealistic, looking at camera. ${persona?.avatar_hint || ''}`.trim();
+  const prompt = avatarPrompt(persona, customPrompt);
   try {
     const res = await fetch(OPENAI_IMAGE, {
       method: 'POST',
@@ -95,31 +127,45 @@ async function generateAvatar(persona) {
 
 // ───────────── יצירת פרסונה (שם/טלפון/אימייל/ביו) ─────────────
 function ruleBasedPersona(strategy) {
-  const gender = Math.random() < 0.5 ? 'male' : 'female';
-  const first = gender === 'male' ? pick(HE_FIRST_M) : pick(HE_FIRST_F);
-  const last = pick(HE_LAST);
+  const gender = pickGender();
+  const nm = pickName(gender);
   return {
-    name: `${first} ${last}`,
+    name: nm.name,
     gender,
-    bio: `אוהד/ת כדורגל, אסטרטגיית ניחוש: ${STRATEGIES[strategy]?.he || strategy}`,
-    email_local: `sim${Date.now().toString(36)}${rnd(900)+100}`,
+    first_en: nm.first_en,
+    last_en: nm.last_en,
+    bio: `אוהד/ת כדורגל מתל-אביב, אסטרטגיית ניחוש: ${STRATEGIES[strategy]?.he || strategy}`,
     style: STRATEGIES[strategy]?.he || strategy
   };
 }
 
+// כתובת אימייל: 30% gmail "אמיתי-למראה" (ElyKohen3645@gmail.com / NixonPower43@gmail.com), השאר @sim.local
+function emailParts(persona) {
+  if (Math.random() < 0.30) {
+    let h;
+    if (Math.random() < 0.55 && persona.first_en && persona.last_en) h = `${persona.first_en}${persona.last_en}`;
+    else h = `${pick(COOL_FIRST)}${pick(COOL)}`;
+    return { local: `${h}${rnd(9000) + 10}`, domain: 'gmail.com' };
+  }
+  const base = (persona.first_en || 'sim').toLowerCase();
+  return { local: `${base}${rnd(9000) + 100}`, domain: 'sim.local' };
+}
+
 async function buildPersona(strategy) {
+  const base = ruleBasedPersona(strategy); // קובע מגדר (60% נקבה) ושם-בסיס בלטינית
+  const genderHe = base.gender === 'female' ? 'אישה' : 'גבר';
   const ai = await chatJSON(
-    'אתה יוצר פרסונות בדויות של אוהדי כדורגל ישראלים עבור סביבת בדיקה. החזר JSON בלבד.',
-    `צור פרסונה ישראלית אקראית וריאליסטית. אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
-החזר JSON עם השדות: {"name":"שם פרטי ושם משפחה בעברית","gender":"male|female","bio":"משפט קצר בעברית על האדם","email_local":"כינוי לטיני קצר באנגלית קטנה לאימייל (ללא רווחים)","avatar_hint":"תיאור קצר באנגלית למראה החיצוני","style":"תיאור קצר בעברית של סגנון הניחוש"}`
+    'אתה יוצר פרסונות בדויות של אוהדי כדורגל ישראלים בסגנון תל-אביבי חילוני ועכשווי, עבור סביבת בדיקה. החזר JSON בלבד.',
+    `צור פרסונה ישראלית תל-אביבית (${genderHe}) ריאליסטית. אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
+החזר JSON: {"name":"שם פרטי ושם משפחה בעברית בסגנון תל-אביבי","bio":"משפט קצר בעברית על האדם","avatar_hint":"תיאור קצר באנגלית למראה החיצוני","style":"תיאור קצר בעברית של סגנון הניחוש"}`
   );
-  const base = ruleBasedPersona(strategy);
   if (!ai || !ai.name) return base;
   return {
     name: String(ai.name).slice(0, 60) || base.name,
-    gender: ai.gender === 'female' ? 'female' : ai.gender === 'male' ? 'male' : base.gender,
+    gender: base.gender,                // אוכפים 60/40 מהבסיס
+    first_en: base.first_en,
+    last_en: base.last_en,
     bio: String(ai.bio || base.bio).slice(0, 240),
-    email_local: (String(ai.email_local || '').toLowerCase().replace(/[^a-z0-9._-]/g, '') || base.email_local).slice(0, 40),
     avatar_hint: String(ai.avatar_hint || '').slice(0, 200),
     style: String(ai.style || base.style).slice(0, 120)
   };
@@ -130,15 +176,15 @@ function ilPhone() {
   return `${prefix}-${String(rnd(9000000) + 1000000)}`;
 }
 
-// אימייל ייחודי בדומיין סימולציה (לעולם לא נשלח אליו מייל אמיתי)
-async function uniqueSimEmail(local) {
-  let candidate = `${local}@sim.local`;
+// אימייל ייחודי. הבוטים מסומנים ב-sim_users ולכן לעולם לא יקבלו מייל אמיתי גם אם הדומיין gmail.com
+async function uniqueSimEmail(local, domain) {
+  let candidate = `${local}@${domain}`;
   for (let i = 0; i < 6; i += 1) {
     const exists = await db.one('SELECT id FROM users WHERE email = ?', [candidate]);
     if (!exists) return candidate;
-    candidate = `${local}${rnd(9999)}@sim.local`;
+    candidate = `${local}${rnd(9999)}@${domain}`;
   }
-  return `${local}${Date.now().toString(36)}@sim.local`;
+  return `${local}${Date.now().toString(36)}@${domain}`;
 }
 
 // ───────────── ניחושי תוצאה לפי אסטרטגיה ─────────────
@@ -187,7 +233,8 @@ async function loadTeams() { return db.query('SELECT code, name_he FROM teams OR
 // ───────────── יצירת בוט בודד ─────────────
 async function createOne(strategy, options) {
   const persona = await buildPersona(strategy);
-  const email = await uniqueSimEmail(persona.email_local);
+  const ep = emailParts(persona);
+  const email = await uniqueSimEmail(ep.local, ep.domain);
   const phone = ilPhone();
   const passwordHash = bcrypt.hashSync(`Sim!${Math.random().toString(36).slice(2, 10)}`, 10);
   let avatarUrl = null;
@@ -319,7 +366,7 @@ async function startBatch({ count, strategy, options }) {
 async function listSim() {
   await ensureSchema();
   const rows = await db.query(`
-    SELECT s.user_id, s.strategy, s.created_at, u.name, u.email, u.phone_number, u.profile_image_url,
+    SELECT s.user_id, s.strategy, s.enabled, s.created_at, u.name, u.email, u.phone_number, u.profile_image_url,
            (SELECT COUNT(*) FROM predictions p WHERE p.user_id = s.user_id) AS predictions,
            (SELECT COUNT(*) FROM match_reviews r WHERE r.user_id = s.user_id) AS reviews,
            (SELECT COUNT(*) FROM review_votes v WHERE v.voter_user_id = s.user_id) AS likes,
@@ -329,9 +376,95 @@ async function listSim() {
     ORDER BY s.created_at DESC`);
   for (const r of rows) {
     r.strategy_he = STRATEGIES[r.strategy]?.he || r.strategy;
+    r.enabled = !!Number(r.enabled);
     ['predictions', 'reviews', 'likes', 'suggestions', 'balance'].forEach(k => { r[k] = Number(r[k]); });
   }
   return { users: rows, progress: { ...state } };
+}
+
+// ───────────── ניהול בוט בודד ─────────────
+function parsePersona(raw) { try { return raw ? JSON.parse(raw) : {}; } catch { return {}; } }
+
+async function getOne(userId) {
+  await ensureSchema();
+  const id = Number(userId);
+  const s = await db.one('SELECT user_id, strategy, enabled, persona, created_at FROM sim_users WHERE user_id = ?', [id]);
+  if (!s) throw new Error('בוט לא נמצא');
+  const u = await db.one('SELECT id, name, email, phone_number, profile_image_url FROM users WHERE id = ?', [id]);
+  return {
+    user_id: id,
+    strategy: s.strategy,
+    strategy_he: STRATEGIES[s.strategy]?.he || s.strategy,
+    enabled: !!Number(s.enabled),
+    persona: parsePersona(s.persona),
+    name: u?.name, email: u?.email, phone_number: u?.phone_number, profile_image_url: u?.profile_image_url,
+    strategies: strategies()
+  };
+}
+
+async function updateOne(userId, fields) {
+  await ensureSchema();
+  const id = Number(userId);
+  const cur = await db.one('SELECT persona, strategy FROM sim_users WHERE user_id = ?', [id]);
+  if (!cur) throw new Error('בוט לא נמצא');
+  const f = fields || {};
+  if (f.name !== undefined)  await db.run('UPDATE users SET name = ? WHERE id = ?', [String(f.name).slice(0, 120), id]);
+  if (f.phone_number !== undefined) await db.run('UPDATE users SET phone_number = ? WHERE id = ?', [String(f.phone_number).slice(0, 32), id]);
+  if (f.email !== undefined && String(f.email).trim()) {
+    const exists = await db.one('SELECT id FROM users WHERE email = ? AND id <> ?', [String(f.email).trim(), id]);
+    if (exists) throw new Error('האימייל כבר בשימוש');
+    await db.run('UPDATE users SET email = ? WHERE id = ?', [String(f.email).trim().slice(0, 190), id]);
+  }
+  if (f.strategy !== undefined && STRATEGY_KEYS.includes(f.strategy)) await db.run('UPDATE sim_users SET strategy = ? WHERE user_id = ?', [f.strategy, id]);
+  if (f.enabled !== undefined) await db.run('UPDATE sim_users SET enabled = ? WHERE user_id = ?', [f.enabled ? 1 : 0, id]);
+  if (f.persona !== undefined || f.bio !== undefined || f.style !== undefined) {
+    const p = parsePersona(cur.persona);
+    if (f.bio !== undefined) p.bio = String(f.bio).slice(0, 240);
+    if (f.style !== undefined) p.style = String(f.style).slice(0, 120);
+    if (f.avatar_hint !== undefined) p.avatar_hint = String(f.avatar_hint).slice(0, 200);
+    if (typeof f.persona === 'object' && f.persona) Object.assign(p, f.persona);
+    await db.run('UPDATE sim_users SET persona = ? WHERE user_id = ?', [JSON.stringify(p), id]);
+  }
+  return getOne(id);
+}
+
+async function setEnabled(userId, enabled) { return updateOne(userId, { enabled: !!enabled }); }
+
+// רענון תמונת פנים עם פרומפט מותאם (אופציונלי)
+async function regenerateAvatar(userId, prompt) {
+  await ensureSchema();
+  const id = Number(userId);
+  const s = await db.one('SELECT persona FROM sim_users WHERE user_id = ?', [id]);
+  if (!s) throw new Error('בוט לא נמצא');
+  const persona = parsePersona(s.persona);
+  const url = await generateAvatar(persona, prompt);
+  if (!url) { const e = new Error('יצירת תמונה נכשלה (בדוק OPENAI_API_KEY)'); e.code = 'NO_IMAGE'; throw e; }
+  await db.run('UPDATE users SET profile_image_url = ? WHERE id = ?', [url, id]);
+  return { ok: true, profile_image_url: url };
+}
+
+// "היסטוריית מעשים" — ציר זמן של פעולות הבוט
+async function history(userId) {
+  await ensureSchema();
+  const id = Number(userId);
+  const events = [];
+  const preds = await db.query(`SELECT p.match_id, p.home_score, p.away_score, p.submitted_at,
+      COALESCE(ht.name_he, m.home_label_he, m.home_code) AS home, COALESCE(at.name_he, m.away_label_he, m.away_code) AS away
+      FROM predictions p JOIN matches m ON m.id = p.match_id
+      LEFT JOIN teams ht ON ht.code = m.home_code LEFT JOIN teams at ON at.code = m.away_code
+      WHERE p.user_id = ? ORDER BY p.submitted_at DESC LIMIT 200`, [id]);
+  for (const p of preds) events.push({ type: 'bet', at: p.submitted_at, text: `ניחש ${p.home} ${p.home_score}-${p.away_score} ${p.away}` });
+  const revs = await db.query(`SELECT r.created_at, r.body, COALESCE(ht.name_he, m.home_code) AS home, COALESCE(at.name_he, m.away_code) AS away
+      FROM match_reviews r JOIN matches m ON m.id = r.match_id
+      LEFT JOIN teams ht ON ht.code = m.home_code LEFT JOIN teams at ON at.code = m.away_code
+      WHERE r.user_id = ? ORDER BY r.created_at DESC LIMIT 100`, [id]);
+  for (const r of revs) events.push({ type: 'review', at: r.created_at, text: `ריביו על ${r.home}-${r.away}: ${String(r.body).slice(0, 80)}` });
+  const likes = await db.query('SELECT created_at FROM review_votes WHERE voter_user_id = ? ORDER BY created_at DESC LIMIT 100', [id]);
+  for (const l of likes) events.push({ type: 'like', at: l.created_at, text: 'אהבתי ריביו' });
+  const sb = await db.query('SELECT created_at, market, subject_label, proposition, stake FROM coin_special_bets WHERE creator_id = ? ORDER BY created_at DESC LIMIT 100', [id]);
+  for (const b of sb) events.push({ type: 'suggestion', at: b.created_at, text: `הציע הימור: ${b.subject_label} (${b.market}/${b.proposition}) על ${b.stake} שיחים` });
+  events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { user_id: id, events: events.slice(0, 300) };
 }
 
 async function removeSim(userId) {
@@ -355,4 +488,4 @@ function strategies() {
   return STRATEGY_KEYS.map(k => ({ key: k, label: STRATEGIES[k].he }));
 }
 
-module.exports = { startBatch, listSim, removeSim, removeAll, strategies, ensureSchema };
+module.exports = { startBatch, listSim, removeSim, removeAll, strategies, ensureSchema, getOne, updateOne, setEnabled, regenerateAvatar, history };
