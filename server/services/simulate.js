@@ -87,19 +87,19 @@ async function chatJSON(system, user) {
   } catch (e) { console.error('sim chatJSON:', e.message); return null; }
 }
 
-const VEHICLES = ['a glossy sports car on a coastal road', 'a powerful motorcycle on an open highway', 'a galloping horse in a field at golden hour', 'a speedboat racing across blue water', 'a jet ski throwing up spray', 'a vintage convertible car at sunset'];
-
-// בונה את פרומפט יצירת התמונה. 10% — רכב/בעל-חיים מהיר; השאר — תמונה מתוך אלבום משפחתי (חתוכה לדמות אחת או עם ילדים).
+// בונה את פרומפט יצירת התמונה — פנים (פורטרט) או חלק מתמונה משפחתית.
 function avatarPrompt(persona, customPrompt) {
   if (customPrompt && String(customPrompt).trim()) return String(customPrompt).trim();
-  if (Math.random() < 0.10) {
-    return `A candid, photorealistic real-life snapshot of ${pick(VEHICLES)}, natural daylight, slightly imperfect amateur photo look, shot on a phone camera.`;
-  }
   const gender = persona?.gender === 'female' ? 'woman' : persona?.gender === 'male' ? 'man' : 'person';
+  if (Math.random() < 0.5) {
+    // פנים — פורטרט ריאליסטי "מהחיים"
+    return `A candid, photorealistic real-life close-up portrait of an Israeli ${gender}, natural daylight, relaxed everyday casual style, looking like a genuine phone snapshot rather than a studio photo, slightly imperfect framing. ${persona?.avatar_hint || ''}`.trim();
+  }
+  // חלק מתמונה משפחתית (חתוך לדמות או עם ילדים)
   const withKids = Math.random() < 0.5
     ? `the ${gender} together with their kids`
     : `cropped to just the ${gender} from a larger family photo`;
-  return `A candid real-life family photograph, ${withKids}, Israeli everyday casual style, natural light, looking like a genuine amateur snapshot from a phone (not a studio portrait), photorealistic, slightly imperfect framing. ${persona?.avatar_hint || ''}`.trim();
+  return `A candid real-life family photograph, ${withKids}, Israeli everyday casual style, natural light, genuine amateur phone snapshot (not a studio portrait), photorealistic, slightly imperfect framing. ${persona?.avatar_hint || ''}`.trim();
 }
 
 // מייצר אווטאר ושומר לדיסק. מחזיר URL יחסי או null. customPrompt — פרומפט מותאם (לרענון פנים).
@@ -134,21 +134,21 @@ function ruleBasedPersona(strategy) {
     gender,
     first_en: nm.first_en,
     last_en: nm.last_en,
+    handle: `${nm.first_en}${nm.last_en}`,
     bio: `אוהד/ת כדורגל מתל-אביב, אסטרטגיית ניחוש: ${STRATEGIES[strategy]?.he || strategy}`,
     style: STRATEGIES[strategy]?.he || strategy
   };
 }
 
-// כתובת אימייל: 30% gmail "אמיתי-למראה" (ElyKohen3645@gmail.com / NixonPower43@gmail.com), השאר @sim.local
+// כתובת אימייל: תמיד @gmail, מבוססת-שם + מילה או מספר (NoaSegev84@gmail.com / NoaSegevReal@gmail.com)
 function emailParts(persona) {
-  if (Math.random() < 0.30) {
-    let h;
-    if (Math.random() < 0.55 && persona.first_en && persona.last_en) h = `${persona.first_en}${persona.last_en}`;
-    else h = `${pick(COOL_FIRST)}${pick(COOL)}`;
-    return { local: `${h}${rnd(9000) + 10}`, domain: 'gmail.com' };
-  }
-  const base = (persona.first_en || 'sim').toLowerCase();
-  return { local: `${base}${rnd(9000) + 100}`, domain: 'sim.local' };
+  const nameHandle = (persona.handle || `${persona.first_en || ''}${persona.last_en || ''}`) || `${pick(COOL_FIRST)}${pick(COOL)}`;
+  let local = nameHandle;
+  const r = Math.random();
+  if (r < 0.45) local += rnd(9000) + 10;                        // שם + מספר
+  else if (r < 0.80) local += pick(COOL) + (rnd(90) + 10);      // שם + מילה + מספר
+  else local += pick(COOL);                                      // שם + מילה
+  return { local, domain: 'gmail.com' };
 }
 
 async function buildPersona(strategy) {
@@ -156,15 +156,17 @@ async function buildPersona(strategy) {
   const genderHe = base.gender === 'female' ? 'אישה' : 'גבר';
   const ai = await chatJSON(
     'אתה יוצר פרסונות בדויות של אוהדי כדורגל ישראלים בסגנון תל-אביבי חילוני ועכשווי, עבור סביבת בדיקה. החזר JSON בלבד.',
-    `צור פרסונה ישראלית תל-אביבית (${genderHe}) ריאליסטית. אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
-החזר JSON: {"name":"שם פרטי ושם משפחה בעברית בסגנון תל-אביבי","bio":"משפט קצר בעברית על האדם","avatar_hint":"תיאור קצר באנגלית למראה החיצוני","style":"תיאור קצר בעברית של סגנון הניחוש"}`
+    `צור פרסונה ישראלית תל-אביבית (${genderHe}) ריאליסטית עם שם עברי מודרני ופחות נפוץ (השתדל להימנע משמות שכיחים מאוד). אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
+החזר JSON: {"name":"שם פרטי ושם משפחה בעברית מודרני","handle":"תעתיק לטיני של השם ב-CamelCase ללא רווחים","bio":"משפט קצר בעברית על האדם","avatar_hint":"תיאור קצר באנגלית למראה החיצוני","style":"תיאור קצר בעברית של סגנון הניחוש"}`
   );
   if (!ai || !ai.name) return base;
+  const handle = String(ai.handle || '').replace(/[^A-Za-z0-9]/g, '') || base.handle;
   return {
     name: String(ai.name).slice(0, 60) || base.name,
     gender: base.gender,                // אוכפים 60/40 מהבסיס
     first_en: base.first_en,
     last_en: base.last_en,
+    handle: handle.slice(0, 40),
     bio: String(ai.bio || base.bio).slice(0, 240),
     avatar_hint: String(ai.avatar_hint || '').slice(0, 200),
     style: String(ai.style || base.style).slice(0, 120)
@@ -233,6 +235,13 @@ async function loadTeams() { return db.query('SELECT code, name_he FROM teams OR
 // ───────────── יצירת בוט בודד ─────────────
 async function createOne(strategy, options) {
   const persona = await buildPersona(strategy);
+  // השתדל להימנע משמות שכבר קיימים (best-effort)
+  for (let i = 0; i < 8; i += 1) {
+    const taken = await db.one('SELECT id FROM users WHERE name = ?', [persona.name]);
+    if (!taken) break;
+    const nm = pickName(persona.gender);
+    persona.name = nm.name; persona.first_en = nm.first_en; persona.last_en = nm.last_en; persona.handle = `${nm.first_en}${nm.last_en}`;
+  }
   const ep = emailParts(persona);
   const email = await uniqueSimEmail(ep.local, ep.domain);
   const phone = ilPhone();
