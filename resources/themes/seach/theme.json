@@ -12,7 +12,7 @@
     "favicon": "favicon.svg"
   },
   "colors": {
-    "header-bg": "#aed581",
+    "header-bg": "rgba(200, 230, 170, 0.5)",
     "header-fg": "#14310f",
     "header-fg-dim": "rgba(20,49,15,0.72)",
     "header-active": "#1d4a2a",
