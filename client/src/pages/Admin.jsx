@@ -2507,6 +2507,18 @@ function ActionsTab() {
   const [ok, setOk]   = useState('');
   const [busy, setBusy] = useState(null);
   const [backupFile, setBackupFile] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [teamCode, setTeamCode] = useState('');
+
+  useEffect(() => { api.get('/teams').then(r => setTeams(r.data || [])).catch(() => {}); }, []);
+
+  const genTeamReviews = async (scope, code) => {
+    setErr(''); setOk(''); setBusy(`tr-${scope}`);
+    try {
+      const r = await api.post('/admin/team-reviews/generate', { scope, code }, { timeout: 600000 });
+      setOk(`ביקורות נבחרת: נוצרו ${r.data.generated}/${r.data.total} (נכשלו: ${(r.data.failed || []).length})`);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(null); }
+  };
 
   const run = async (op, url, label) => {
     setErr(''); setOk(''); setBusy(op);
@@ -2600,6 +2612,30 @@ function ActionsTab() {
         }}
         variant="gold"
       />
+
+      <div style={{ background: 'var(--paper-pure)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+        <h3 style={{ margin: '0 0 6px' }}>עדכון ביקורות נבחרת (AI)</h3>
+        <p style={{ color: 'var(--muted)', margin: '0 0 12px', fontSize: 14 }}>
+          מחקר רשת חי המפיק ביקורת טקטית בעברית לכל נבחרת. הביקורת תיפתח בלחיצה על דגל הנבחרת. עשוי לקחת זמן (קריאה לכל נבחרת).
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn btn-gold" disabled={busy === 'tr-next8'} onClick={() => genTeamReviews('next8')}>
+            {busy === 'tr-next8' ? '...' : '8 הנבחרות הקרובות'}
+          </button>
+          <button className="btn btn-outline" disabled={busy === 'tr-all'} onClick={() => genTeamReviews('all')}>
+            {busy === 'tr-all' ? '...' : 'כל הנבחרות'}
+          </button>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            <select value={teamCode} onChange={e => setTeamCode(e.target.value)}>
+              <option value="">— בחר נבחרת —</option>
+              {teams.map(t => <option key={t.code} value={t.code}>{t.name_he || t.code}</option>)}
+            </select>
+            <button className="btn btn-sm btn-outline" disabled={!teamCode || busy === 'tr-team'} onClick={() => genTeamReviews('team', teamCode)}>
+              {busy === 'tr-team' ? '...' : 'הפק לנבחרת'}
+            </button>
+          </span>
+        </div>
+      </div>
 
       <ActionCard
         title="חישוב נקודות מחדש"

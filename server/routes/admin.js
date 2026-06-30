@@ -1655,6 +1655,25 @@ router.post('/ai-predictions/generate', async (req, res) => {
   }
 });
 
+// ייצור ביקורות נבחרת (AI): scope = all | next8 | team (עם code)
+router.post('/team-reviews/generate', async (req, res) => {
+  try {
+    const tr = require('../services/teamReviews');
+    const scope = String(req.body?.scope || 'next8');
+    let codes;
+    if (scope === 'all') codes = await tr.allTeamCodes();
+    else if (scope === 'team') codes = req.body?.code ? [String(req.body.code)] : [];
+    else codes = await tr.next8TeamCodes();
+    if (!codes.length) return res.status(400).json({ error: 'לא נמצאו נבחרות לייצור' });
+    const result = await tr.generateForCodes(codes);
+    res.json({ ...result, scope, total: codes.length });
+  } catch (e) {
+    console.error('admin/team-reviews:', e);
+    const msg = e.code === 'NO_API_KEY' ? 'חסר OPENAI_API_KEY בשרת' : `שגיאה: ${e.message}`;
+    res.status(500).json({ error: msg });
+  }
+});
+
 // סריקת משחקים זמינים מה-web והוספתם למסד הנתונים
 router.post('/scan-fixtures-now', async (req, res) => {
   try {

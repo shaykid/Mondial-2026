@@ -9,6 +9,7 @@
     "db:create": "node scripts/db-create.js",
     "db:init": "node scripts/db-init.js",
     "db:seed": "node seed.js",
+    "db:team_reviews": "node scripts/db-team-reviews.js",
     "db:fill_players": "node scripts/fill-players.js",
     "db:fill_users": "node scripts/fill-users.js",
     "db:setup": "npm run db:create && npm run db:init && npm run db:seed",
