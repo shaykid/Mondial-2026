@@ -333,9 +333,10 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
       setForm({
         name: r.data.name || '', phone_number: r.data.phone_number || '', email: r.data.email || '',
         strategy: r.data.strategy, enabled: r.data.enabled, email_as_name: !!r.data.persona?.email_as_name,
+        show_avatar: r.data.persona?.show_avatar !== false,
         bio: r.data.persona?.bio || '', style: r.data.persona?.style || '', avatar_hint: r.data.persona?.avatar_hint || ''
       });
-      setImg(r.data.profile_image_url || '');
+      setImg(r.data.persona?.avatar_url || r.data.profile_image_url || '');
     }).catch(e => setMsg(errMsg(e)));
   }, [id]);
 
@@ -393,6 +394,9 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
             </label>
             <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
               <input type="checkbox" checked={!!form.email_as_name} onChange={e => upd('email_as_name', e.target.checked)} /> השתמש באימייל כשם תצוגה
+            </label>
+            <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!form.show_avatar} onChange={e => upd('show_avatar', e.target.checked)} /> הצג תמונת פרופיל
             </label>
           </div>
         </div>

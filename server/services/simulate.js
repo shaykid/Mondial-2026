@@ -387,10 +387,15 @@ async function createOne(strategy, options) {
   persona.email_as_name = Math.random() < 0.30;
   const displayName = persona.email_as_name ? email.split('@')[0] : persona.name;
 
+  // 30% מהבוטים — ללא תמונת פרופיל (התמונה נשמרת ב-persona אך לא מוצגת)
+  persona.avatar_url = avatarUrl;
+  persona.show_avatar = Math.random() < 0.70;
+  const profileUrl = (persona.show_avatar && avatarUrl) ? avatarUrl : null;
+
   const ins = await db.run(
     `INSERT INTO users (email, name, phone_number, profile_image_url, password_hash, is_admin, is_guest, can_guess_groups)
      VALUES (?, ?, ?, ?, ?, 0, 0, 1)`,
-    [email, displayName, phone, avatarUrl, passwordHash]
+    [email, displayName, phone, profileUrl, passwordHash]
   );
   const userId = ins.insertId;
   await db.run(
@@ -398,7 +403,7 @@ async function createOne(strategy, options) {
     [userId, strategy, JSON.stringify({ ...persona, phone, email })]
   );
 
-  const summary = { user_id: userId, name: displayName, email, phone, strategy, predictions: 0, reviews: 0, likes: 0, suggestions: 0, avatar: !!avatarUrl };
+  const summary = { user_id: userId, name: displayName, email, phone, strategy, predictions: 0, reviews: 0, likes: 0, suggestions: 0, avatar: !!profileUrl };
   const mode = STRATEGIES[strategy]?.score || 'uniform';
   const matches = await loadMatches();
 
@@ -600,10 +605,18 @@ async function updateOne(userId, fields) {
   if (f.style !== undefined) p.style = String(f.style).slice(0, 120);
   if (f.avatar_hint !== undefined) p.avatar_hint = String(f.avatar_hint).slice(0, 200);
   if (f.email_as_name !== undefined) p.email_as_name = !!f.email_as_name;
+  if (f.show_avatar !== undefined) p.show_avatar = !!f.show_avatar;
   if (typeof f.persona === 'object' && f.persona) Object.assign(p, f.persona);
 
+  const urow = await db.one('SELECT email, name, profile_image_url FROM users WHERE id = ?', [id]);
+  // תמונת פרופיל: לבוטים ישנים נשמור את ה-URL הקיים ל-persona בפעם הראשונה
+  if (p.avatar_url === undefined && urow.profile_image_url) p.avatar_url = urow.profile_image_url;
+  if (f.show_avatar !== undefined || f.persona !== undefined) {
+    const profileUrl = (p.show_avatar !== false && p.avatar_url) ? p.avatar_url : null;
+    await db.run('UPDATE users SET profile_image_url = ? WHERE id = ?', [profileUrl, id]);
+  }
+
   // שם התצוגה: לפי email_as_name → handle של האימייל; אחרת השם העברי
-  const urow = await db.one('SELECT email, name FROM users WHERE id = ?', [id]);
   const heName = p.he_name || urow.name;
   const display = p.email_as_name ? String(urow.email).split('@')[0] : heName;
   await db.run('UPDATE users SET name = ? WHERE id = ?', [String(display).slice(0, 120), id]);
@@ -668,6 +681,8 @@ async function regenerateAvatar(userId, prompt) {
   const persona = parsePersona(s.persona);
   const url = await generateAvatar(persona, prompt);
   if (!url) { const e = new Error('יצירת תמונה נכשלה (בדוק OPENAI_API_KEY)'); e.code = 'NO_IMAGE'; throw e; }
+  persona.avatar_url = url; persona.show_avatar = true; // יצירת פנים חדשות מפעילה הצגה
+  await db.run('UPDATE sim_users SET persona = ? WHERE user_id = ?', [JSON.stringify(persona), id]);
   await db.run('UPDATE users SET profile_image_url = ? WHERE id = ?', [url, id]);
   return { ok: true, profile_image_url: url };
 }
