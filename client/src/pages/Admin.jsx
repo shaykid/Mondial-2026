@@ -87,6 +87,9 @@ function SimulateTab() {
   const [betA, setBetA] = useState('');
   const [filter, setFilter] = useState('');
   const [randomN, setRandomN] = useState(10);
+  const [sectors, setSectors] = useState([]);
+  const [selSectors, setSelSectors] = useState([]);
+  const [showSectors, setShowSectors] = useState(false);
 
   const load = async () => {
     try {
@@ -130,6 +133,7 @@ function SimulateTab() {
 
   useEffect(() => {
     api.get('/admin/simulate/strategies').then(r => setStrategies(r.data.strategies || [])).catch(() => {});
+    api.get('/admin/simulate/sectors').then(r => setSectors(r.data.sectors || [])).catch(() => {});
     api.get('/matches').then(r => setMatches((r.data || []).filter(m => m.status !== 'finished'))).catch(() => {});
     load();
     const iv = setInterval(load, 4000); // טבלה חיה
@@ -139,7 +143,7 @@ function SimulateTab() {
   const create = async () => {
     setBusy(true); setMsg('');
     try {
-      const { data } = await api.post('/admin/simulate', { count: Number(count), strategy, options: opts });
+      const { data } = await api.post('/admin/simulate', { count: Number(count), strategy, options: { ...opts, sectors: selSectors } });
       setMsg(`✓ התחילה יצירת ${data.started} בוטים (${data.strategy}). הטבלה תתעדכן בזמן אמת.`);
       load();
     } catch (e) {
@@ -188,6 +192,26 @@ function SimulateTab() {
               <input type="checkbox" checked={!!opts[k]} onChange={() => toggle(k)} /> {lbl}
             </label>
           ))}
+        </div>
+        <div>
+          <button className="btn btn-sm btn-outline" onClick={() => setShowSectors(s => !s)}>
+            מגזרים בחברה {selSectors.length ? `(${selSectors.length} נבחרו)` : '(הכל לפי משקל)'} {showSectors ? '▲' : '▼'}
+          </button>
+          {showSectors && (
+            <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--paper-dim)', borderRadius: 8, maxHeight: 180, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 4 }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm btn-outline" onClick={() => setSelSectors(sectors.map(s => s.name))}>בחר הכל</button>
+                <button className="btn btn-sm btn-outline" onClick={() => setSelSectors([])}>נקה (הכל לפי משקל)</button>
+              </div>
+              {sectors.map(s => (
+                <label key={s.name} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+                  <input type="checkbox" checked={selSectors.includes(s.name)}
+                    onChange={() => setSelSectors(v => v.includes(s.name) ? v.filter(x => x !== s.name) : [...v, s.name])} />
+                  {s.name} <span style={{ color: 'var(--muted)' }}>{s.share}%</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-gold" onClick={create} disabled={busy || progress.running}>
@@ -373,8 +397,20 @@ function BotEditModal({ id, strategies, onClose, onSaved }) {
           </div>
         </div>
 
-        <label style={{ display: 'block', marginTop: 10 }}>ביו<textarea rows="2" value={form.bio} onChange={e => upd('bio', e.target.value)} style={{ ...inputStyle('100%'), display: 'block' }} /></label>
+        <label style={{ display: 'block', marginTop: 10 }}>ביו<textarea rows="3" value={form.bio} onChange={e => upd('bio', e.target.value)} style={{ ...inputStyle('100%'), display: 'block' }} /></label>
         <label style={{ display: 'block' }}>סגנון ניחוש<input value={form.style} onChange={e => upd('style', e.target.value)} style={inputStyle('100%')} /></label>
+
+        {bot.persona && (bot.persona.sector || bot.persona.residence) && (
+          <div style={{ marginTop: 10, padding: 10, background: 'var(--paper-dim)', borderRadius: 8, fontSize: 13, display: 'grid', gap: 3 }}>
+            {bot.persona.sector && <div><b>מגזר:</b> {bot.persona.sector}</div>}
+            {bot.persona.residence && <div><b>מגורים:</b> {bot.persona.residence}</div>}
+            {bot.persona.marital_status && <div><b>מצב משפחתי:</b> {bot.persona.marital_status}</div>}
+            {bot.persona.workplace && <div><b>עבודה:</b> {bot.persona.workplace}</div>}
+            {Array.isArray(bot.persona.children) && bot.persona.children.length > 0 &&
+              <div><b>ילדים:</b> {bot.persona.children.map(c => `${c.name}${c.age ? ` (${c.age})` : ''}`).join(', ')}</div>}
+            {bot.persona.shadow_name && <div><b>מהמר הפוך מ:</b> {bot.persona.shadow_name}</div>}
+          </div>
+        )}
 
         <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
           <button className="btn btn-gold" onClick={save} disabled={busy}>{busy ? 'שומר…' : 'שמירה'}</button>

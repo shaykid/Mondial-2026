@@ -1710,6 +1710,11 @@ router.get('/simulate/strategies', (req, res) => {
   res.json({ strategies: simulate.strategies() });
 });
 
+router.get('/simulate/sectors', async (req, res) => {
+  try { res.json({ sectors: await simulate.sectorsList() }); }
+  catch (e) { res.status(500).json({ error: 'שגיאת שרת' }); }
+});
+
 router.get('/simulate/list', async (req, res) => {
   try {
     res.json(await simulate.listSim());

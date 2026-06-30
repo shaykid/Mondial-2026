@@ -224,25 +224,83 @@ function emailParts(persona) {
   return { local, domain: 'gmail.com' };
 }
 
-async function buildPersona(strategy) {
+// ───────────── מגזרים בחברה הישראלית (נוצר ע"י AI ונשמר ב-settings) ─────────────
+let SECTORS = null;
+const SECTORS_SETTING = 'sim_sectors';
+const SECTOR_FALLBACK = [
+  { name: 'חילונים מרכז תל-אביב', share: 10 }, { name: 'מרכז ליברלי', share: 8 }, { name: 'ימין לאומי חילוני', share: 9 },
+  { name: 'דתיים-לאומיים', share: 8 }, { name: 'מתנחלים', share: 5 }, { name: 'חרדים ליטאים', share: 5 },
+  { name: 'חרדים חסידים', share: 4 }, { name: 'חרדים ספרדים', share: 5 }, { name: 'מסורתיים ספרדים', share: 8 },
+  { name: 'מסורתיים מזרחים', share: 6 }, { name: 'עולי ברית-המועצות', share: 6 }, { name: 'עולי אתיופיה', share: 2 },
+  { name: 'עולים צרפתים', share: 1 }, { name: 'אנגלוסקסים', share: 1 }, { name: 'ערבים מוסלמים', share: 8 },
+  { name: 'ערבים נוצרים', share: 1 }, { name: 'דרוזים', share: 1 }, { name: 'בדואים', share: 2 },
+  { name: 'קיבוצניקים', share: 1 }, { name: 'מושבניקים', share: 1 }, { name: 'עיירות פיתוח', share: 3 },
+  { name: 'הייטקיסטים מרכז', share: 3 }, { name: 'צעירי פריפריה', share: 2 }, { name: 'גמלאים ותיקים', share: 3 },
+  { name: 'נוער דתי ירושלים', share: 2 }, { name: 'חרדים מודרניים', share: 1 }
+];
+const CITIES = ['תל אביב', 'חיפה', 'ירושלים', 'באר שבע', 'ראשון לציון', 'פתח תקווה', 'נתניה', 'אשדוד', 'רחובות', 'כפר סבא', 'מודיעין', 'חולון', 'רמת גן', 'בני ברק', 'נצרת', 'עפולה', 'קריית שמונה', 'אריאל'];
+const JOBS = ['מורה', 'מהנדס תוכנה', 'עצמאי', 'נהג', 'אחות', 'רואה חשבון', 'מוכר', 'פקיד', 'חשמלאי', 'שף', 'עורך דין', 'קבלן', 'גרפיקאי', 'חקלאי', 'גננת', 'טכנאי'];
+const MARITAL = ['רווק/ה', 'נשוי/אה', 'גרוש/ה', 'בזוגיות', 'אלמן/ה'];
+const KID_NAMES = ['איתי', 'נועה', 'דניאל', 'שירה', 'יואב', 'מאיה', 'עמית', 'רוני', 'ליה', 'אורי', 'יהלי', 'אגם', 'רום', 'תמר'];
+function fallbackChildren() { const n = rnd(4); const out = []; for (let i = 0; i < n; i += 1) out.push({ name: pick(KID_NAMES), age: 1 + rnd(18) }); return out; }
+function weightedPick(arr) { const total = arr.reduce((s, x) => s + (Number(x.share) || 1), 0); let r = Math.random() * total; for (const x of arr) { r -= (Number(x.share) || 1); if (r <= 0) return x; } return arr[arr.length - 1]; }
+
+async function generateSectorsAI() {
+  const ai = await chatJSON(
+    'אתה חוקר חברה ישראלית. החזר JSON בלבד.',
+    `צור מאגר של 26 המגזרים המובילים בחברה הישראלית, כל אחד וחלקו המשוער היחסי באחוזים, ממוין לפי שיוך פוליטי ואז דתי ואז עדתי (בסדר הזה).
+החזר JSON: {"sectors":[{"name":"שם המגזר בעברית","share":מספר,"note":"מאפיין קצר"}]}`
+  );
+  if (!ai || !Array.isArray(ai.sectors)) return null;
+  const out = ai.sectors.map(s => ({ name: String(s.name || '').trim().slice(0, 80), share: Number(s.share) || 1, note: String(s.note || '').slice(0, 120) })).filter(s => s.name);
+  return out.length >= 8 ? out : null;
+}
+
+async function ensureSectors() {
+  if (SECTORS) return SECTORS;
+  try { const row = await db.one('SELECT `value` FROM settings WHERE `key` = ?', [SECTORS_SETTING]); if (row && row.value) { const p = JSON.parse(row.value); if (Array.isArray(p) && p.length) { SECTORS = p; return SECTORS; } } } catch (e) { /* */ }
+  const gen = await generateSectorsAI();
+  if (gen) { SECTORS = gen; try { await db.run('INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)', [SECTORS_SETTING, JSON.stringify(gen)]); } catch (e) { /* */ } return SECTORS; }
+  SECTORS = SECTOR_FALLBACK; return SECTORS;
+}
+
+function pickSector(selected) {
+  const inv = (SECTORS && SECTORS.length) ? SECTORS : SECTOR_FALLBACK;
+  let pool = inv;
+  if (Array.isArray(selected) && selected.length) { const set = new Set(selected); pool = inv.filter(s => set.has(s.name)); if (!pool.length) pool = inv; }
+  return weightedPick(pool);
+}
+
+async function buildPersona(strategy, sector) {
   const base = ruleBasedPersona(strategy); // קובע מגדר (60% נקבה) ושם-בסיס בלטינית
   const genderHe = base.gender === 'female' ? 'אישה' : 'גבר';
+  const secName = sector?.name || '';
   const ai = await chatJSON(
-    'אתה יוצר פרסונות בדויות של אוהדי כדורגל ישראלים בסגנון תל-אביבי חילוני ועכשווי, עבור סביבת בדיקה. החזר JSON בלבד.',
-    `צור פרסונה ישראלית תל-אביבית (${genderHe}) ריאליסטית עם שם עברי מודרני ופחות נפוץ (השתדל להימנע משמות שכיחים מאוד). אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
-החזר JSON: {"name":"שם פרטי ושם משפחה בעברית מודרני","handle":"תעתיק לטיני של השם ב-CamelCase ללא רווחים","bio":"משפט קצר בעברית על האדם","avatar_hint":"תיאור קצר באנגלית למראה החיצוני","style":"תיאור קצר בעברית של סגנון הניחוש"}`
+    'אתה יוצר פרסונות בדויות עשירות של ישראלים מכל מגזרי החברה, עבור סביבת בדיקה. החזר JSON בלבד.',
+    `צור פרסונה ישראלית ריאליסטית (${genderHe}) מהמגזר "${secName}". שם עברי מודרני התואם למגזר.
+תאר אותה בעושר: מקום מגורים, מצב משפחתי, מקום עבודה, ושמות הילדים וגילם.
+אסטרטגיית הימור: "${STRATEGIES[strategy]?.he || strategy}".
+החזר JSON: {"name":"שם מלא בעברית","handle":"תעתיק לטיני CamelCase ללא רווחים","bio":"2-3 משפטים בעברית המשלבים מגזר, עיסוק ומשפחה","avatar_hint":"תיאור קצר באנגלית למראה החיצוני התואם למגזר","style":"סגנון הניחוש בעברית","residence":"עיר","marital_status":"מצב משפחתי","workplace":"מקום עבודה","children":[{"name":"שם","age":גיל}]}`
   );
-  if (!ai || !ai.name) return base;
+  const richFallback = {
+    residence: pick(CITIES), marital_status: pick(MARITAL), workplace: pick(JOBS), children: fallbackChildren()
+  };
+  if (!ai || !ai.name) return { ...base, sector: secName, ...richFallback, bio: `${base.bio} · ${secName}` };
   const handle = String(ai.handle || '').replace(/[^A-Za-z0-9]/g, '') || base.handle;
+  const children = Array.isArray(ai.children) ? ai.children.slice(0, 6).map(c => ({ name: String(c.name || '').slice(0, 40), age: Number(c.age) || null })).filter(c => c.name) : richFallback.children;
   return {
     name: String(ai.name).slice(0, 60) || base.name,
-    gender: base.gender,                // אוכפים 60/40 מהבסיס
-    first_en: base.first_en,
-    last_en: base.last_en,
+    gender: base.gender,
+    first_en: base.first_en, last_en: base.last_en,
     handle: handle.slice(0, 40),
-    bio: String(ai.bio || base.bio).slice(0, 240),
+    sector: secName,
+    bio: String(ai.bio || base.bio).slice(0, 400),
     avatar_hint: String(ai.avatar_hint || '').slice(0, 200),
-    style: String(ai.style || base.style).slice(0, 120)
+    style: String(ai.style || base.style).slice(0, 120),
+    residence: String(ai.residence || richFallback.residence).slice(0, 60),
+    marital_status: String(ai.marital_status || richFallback.marital_status).slice(0, 40),
+    workplace: String(ai.workplace || richFallback.workplace).slice(0, 80),
+    children
   };
 }
 
@@ -307,7 +365,8 @@ async function loadTeams() { return db.query('SELECT code, name_he FROM teams OR
 
 // ───────────── יצירת בוט בודד ─────────────
 async function createOne(strategy, options) {
-  const persona = await buildPersona(strategy);
+  const sector = pickSector(options.sectors);
+  const persona = await buildPersona(strategy, sector);
   // השתדל להימנע משמות שכבר קיימים (best-effort)
   for (let i = 0; i < 8; i += 1) {
     const taken = await db.one('SELECT id FROM users WHERE name = ?', [persona.name]);
@@ -447,6 +506,7 @@ async function createOne(strategy, options) {
 async function runBatch({ count, strategy, options }) {
   await ensureSchema();
   await ensureInventory().catch(() => {}); // טוען מאגר שמות (AI/מטמון) פעם אחת לפני האצווה
+  await ensureSectors().catch(() => {});   // טוען מאגר מגזרים
   state.running = true; state.total = count; state.done = 0; state.failed = 0;
   state.strategy = strategy; state.startedAt = new Date().toISOString(); state.lastError = null;
   for (let i = 0; i < count; i += 1) {
@@ -652,6 +712,8 @@ function strategies() {
   return STRATEGY_KEYS.map(k => ({ key: k, label: STRATEGIES[k].he }));
 }
 
+async function sectorsList() { return ensureSectors(); }
+
 // ───────────── פעילות אורגנית (בוטים פעילים פועלים לאורך זמן) ─────────────
 async function simSetting(key, def) {
   try { const r = await db.one('SELECT `value` FROM settings WHERE `key` = ?', [key]); return r ? r.value : def; }
@@ -718,4 +780,4 @@ async function organicTick(opts = {}) {
   return { acted, bots: max };
 }
 
-module.exports = { startBatch, listSim, removeSim, removeAll, strategies, ensureSchema, getOne, updateOne, setEnabled, bulkAction, regenerateAvatar, history, organicTick };
+module.exports = { startBatch, listSim, removeSim, removeAll, strategies, sectorsList, ensureSchema, getOne, updateOne, setEnabled, bulkAction, regenerateAvatar, history, organicTick };
